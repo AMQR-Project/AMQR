@@ -15,7 +15,7 @@ from utils.metrics import compute_spd_all_props
 
 def plot_combined_motivation_1x4(data_dict, save_path=None):
     """
-    绘制 1x4 终极动机对比图 (Straight vs Bent / Frechet vs AMQR)
+    Plot a 1x4 motivation comparison chart (Straight vs Bent / Frechet vs AMQR)
     """
     fig, axes = plt.subplots(1, 4, figsize=(32, 8), facecolor='white')
     cmap_choice = 'plasma'
@@ -70,23 +70,22 @@ def plot_combined_motivation_1x4(data_dict, save_path=None):
     cbar.ax.tick_params(labelsize=14)
 
     if save_path:
-        # 🌟 自动创建缺失的文件夹，防止报错
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"✅ 图片已成功保存至: {save_path}")
+        print(f"Image successfully saved to: {save_path}")
 
     plt.show()
 
 
 def plot_2x5_spiral_experiment(T_sorted, P_sorted, t_traj, centers, masks, target_t=5.0, save_path=None):
     """
-    🌟 升级版：渲染 3D 穿孔流形追踪的 2x5 终极对比图 (无 Ground Truth 版)
+    Render a 2x5 comparison chart for 3D perforated manifold tracking (without Ground Truth)
     """
     from scipy.ndimage import gaussian_filter1d
     import matplotlib.pyplot as plt
     import os
 
-    # 3D 轨迹平滑
+    # 3D trajectory smoothing
     traj_3d = {k: gaussian_filter1d(v, sigma=3, axis=0) for k, v in centers.items()}
 
     fig = plt.figure(figsize=(32, 16))
@@ -96,7 +95,7 @@ def plot_2x5_spiral_experiment(T_sorted, P_sorted, t_traj, centers, masks, targe
         pass
 
     methods = ['nw', 'f_l2', 'f_l1', 'kde', 'a']
-    # 引入了高级藏青色/灰蓝色给 NW，其他依次是 红、橙、紫、绿
+
     colors_core = ['#34495e', '#e74c3c', '#e67e22', '#9b59b6', '#27ae60']
     colors_traj = ['#2c3e50', '#c0392b', '#d35400', '#8e44ad', '#1e8449']
 
@@ -116,7 +115,7 @@ def plot_2x5_spiral_experiment(T_sorted, P_sorted, t_traj, centers, masks, targe
         f"Cross-Section @ X={target_t} (AMQR)"
     ]
 
-    # --- 上半部分：宏观 3D 图 ---
+    # --- Upper part: Macro 3D view ---
     for i, method in enumerate(methods):
         ax = fig.add_subplot(2, 5, i + 1, projection='3d')
         ax.scatter(P_sorted[~masks[method], 0], P_sorted[~masks[method], 1], P_sorted[~masks[method], 2],
@@ -125,8 +124,6 @@ def plot_2x5_spiral_experiment(T_sorted, P_sorted, t_traj, centers, masks, targe
                    color=colors_core[i], s=10, alpha=0.6, label="Top 20% Mask")
         ax.plot(traj_3d[method][:, 0], traj_3d[method][:, 1], traj_3d[method][:, 2], color=colors_traj[i], lw=5,
                 label="Estimated Trajectory")
-
-        # ⚠️ 删除了 Ground Truth 线的绘制
 
         ax.set_title(titles_3d[i], fontsize=18, fontweight='bold', pad=15)
         ax.set_xlim(0, 10);
@@ -138,7 +135,7 @@ def plot_2x5_spiral_experiment(T_sorted, P_sorted, t_traj, centers, masks, targe
         ax.zaxis.pane.fill = False
         if i == 0: ax.legend(loc='upper right', fontsize=14)
 
-    # --- 下半部分：微观 2D 截面染色图 ---
+    # --- Lower part: Micro 2D cross-section coloring plot ---
     window = 0.3
     idx_slice = np.where(np.abs(T_sorted - target_t) <= window)[0]
     idx_t = np.argmin(np.abs(t_traj - target_t))
@@ -153,11 +150,9 @@ def plot_2x5_spiral_experiment(T_sorted, P_sorted, t_traj, centers, masks, targe
                    alpha=0.9, edgecolor='white', label="Top 20% Mask")
 
         exact_center = centers[method][idx_t]
-        # 放大了中心叉号（从 500 变成 800），让视觉焦点集中在模型表现上
+
         ax.scatter(exact_center[1], exact_center[2], marker='X', color=colors_traj[i], s=800, edgecolor='black', lw=2,
                    label="Estimated Center")
-
-        # ⚠️ 删除了 Ground Truth 星号的绘制
 
         circle = plt.Circle((0, 0), 3.0, color='blue', fill=False, linestyle=':', linewidth=2, alpha=0.4)
         ax.add_patch(circle)
@@ -172,20 +167,19 @@ def plot_2x5_spiral_experiment(T_sorted, P_sorted, t_traj, centers, masks, targe
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"✅ 图片已成功保存至: {save_path}")
+        print(f"Image successfully saved to: {save_path}")
     plt.show()
 
 
 def plot_bimodal_crescent_1x5(Y, meds, ranks, save_path=None):
     """
-    绘制双峰月牙流形的 1x5 终极对比图
-    meds 和 ranks 是包含 5 种方法结果的列表：
+    Plot the 1x5 ultimate comparison chart for the bimodal crescent manifold
+    meds and ranks are lists containing the results of 5 methods:
     [NW Mean, Fréchet L2, Fréchet L1, KDE Mode, AMQR]
     """
     import matplotlib.pyplot as plt
     import os
 
-    # 扩展为 1x5 布局，并调整画布宽度
     fig, axes = plt.subplots(1, 5, figsize=(30, 6), facecolor='white')
 
     titles = [
@@ -199,23 +193,23 @@ def plot_bimodal_crescent_1x5(Y, meds, ranks, save_path=None):
     for i in range(5):
         ax = axes[i]
 
-        # 1. 绘制背景全量数据
-        # 颜色表示分位数排秩 u，使用 viridis_r (深色为核心，黄色为边缘)
+        # 1. Plot the background full dataset
+        # Color represents the quantile rank u, using viridis_r (dark for core, yellow for edge)
         sc = ax.scatter(Y[:, 0], Y[:, 1], c=ranks[i], cmap='viridis_r',
                         s=25, alpha=0.4, edgecolors='none', zorder=1)
 
-        # 2. 突出显示前 10% 的核心拓扑管 (Top 10% Quantile)
-        # 这能直观展示不同方法对“核心”的定义差异
+        # 2. Highlight the top 10% core topological tube
+        # This visually demonstrates the difference in the definition of "core" among different methods
         mask_10 = ranks[i] <= 0.10
         ax.scatter(Y[mask_10, 0], Y[mask_10, 1], color='#e74c3c',
                    s=35, alpha=0.7, label='Top 10% Core', zorder=2)
 
-        # 3. 标出计算出的几何中心点 (Estimated Center)
-        # 使用醒目的绿色星号，并增加描边以防在浅色区看不清
+        # 3. Mark the calculated geometric center point (Estimated Center)
+        # Use a prominent green star with an outline to prevent it from being invisible in light-colored areas
         ax.scatter(meds[i][0], meds[i][1], marker='*', color='#2ecc71',
                    s=900, edgecolor='black', lw=2, label='Geometric Center', zorder=5)
 
-        # 图表细节美化
+        # Chart detail enhancement
         ax.set_title(titles[i], fontsize=18, fontweight='bold', pad=20)
         ax.set_xlim(-6, 6)
         ax.set_ylim(-2, 6)
@@ -223,11 +217,11 @@ def plot_bimodal_crescent_1x5(Y, meds, ranks, save_path=None):
         ax.set_xticks([])
         ax.set_yticks([])
 
-        # 仅在第一个子图显示图例，避免视觉拥挤
+        # Only display the legend in the first subplot to avoid visual clutter
         if i == 0:
             ax.legend(loc='lower center', fontsize=12, frameon=True, shadow=True)
 
-    # 添加全局颜色条
+    # Add a global color bar
     cbar_ax = fig.add_axes([0.92, 0.2, 0.01, 0.6])
     cbar = fig.colorbar(sc, cax=cbar_ax)
     cbar.set_label('Topological Quantile Rank $u$', fontsize=14, fontweight='bold')
@@ -237,15 +231,15 @@ def plot_bimodal_crescent_1x5(Y, meds, ranks, save_path=None):
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"✅ 1x5 双峰月牙对比图已保存至: {save_path}")
+        print(f"1x5 bimodal crescent comparison chart saved to: {save_path}")
 
-    # 根据指令，在自动化脚本中建议注释掉 plt.show()，仅保留 savefig
+    # As per instructions, it is recommended to comment out plt.show() in automated scripts and only keep savefig
     # plt.show()
 
 
 def plot_dynamic_functional_2x5(T, X_grid, Y, t_eval, centers_dict, target_t=7.5, save_path=None):
     """
-    🌟 升级版：渲染动态高维泛函追踪的 2x5 终极对比图 (无 Ground Truth 版)
+    Render a 2x5 comparison chart for dynamic high-dimensional functional tracking (without Ground Truth)
     """
     fig = plt.figure(figsize=(38, 14), facecolor='white')
 
@@ -255,20 +249,19 @@ def plot_dynamic_functional_2x5(T, X_grid, Y, t_eval, centers_dict, target_t=7.5
     titles_cross = ["Cross-section (NW)", "Cross-section (Fréchet L2)", "Cross-section (Fréchet L1)",
                     "Cross-section (KDE)", "Cross-section (AMQR)"]
 
-    # 延续使用刚才在 3D 螺旋图中使用的统一高颜值色卡
     colors = ['#34495e', '#e74c3c', '#e67e22', '#9b59b6', '#27ae60']
 
     # ==========================================
-    # 上半场：全局时空热力图 (Spatiotemporal Heatmap)
+    # First half: Global Spatiotemporal Heatmap
     # ==========================================
     for i, method in enumerate(methods):
         ax = fig.add_subplot(2, 5, i + 1)
         est_surface = np.array(centers_dict[method])
 
-        # 绘制热力图 (代表模型预测的二维泛函随时间的演化)
+        # Plot heatmap (representing the evolution of the model's predicted 2D functional over time)
         c = ax.pcolormesh(t_eval, X_grid, est_surface.T, cmap='viridis', shading='auto', vmin=0, vmax=2.5)
 
-        # 标出截面位置
+        # Mark the cross-section position
         ax.axvline(target_t, color='white', linestyle=':', lw=3, label=f"Slice @ T={target_t}")
 
         ax.set_title(titles_global[i], fontsize=22, fontweight='bold', pad=15)
@@ -280,8 +273,8 @@ def plot_dynamic_functional_2x5(T, X_grid, Y, t_eval, centers_dict, target_t=7.5
         if i == 4: cbar.set_label("Amplitude", fontsize=14)
 
     # ==========================================
-    # 下半场：截面曲线对比图 (Cross-sectional Slice)
-    # 核心目标：展示破坏性干涉 (Destructive Interference) 的发生与避免
+    # Second half: Cross-sectional Slice comparison chart
+    # Core objective: Demonstrate the occurrence and avoidance of Destructive Interference
     # ==========================================
     window = 1.0
     idx_slice = np.where(np.abs(T - target_t) <= window)[0]
@@ -292,11 +285,11 @@ def plot_dynamic_functional_2x5(T, X_grid, Y, t_eval, centers_dict, target_t=7.5
     for i, method in enumerate(methods):
         ax = fig.add_subplot(2, 5, i + 6)
 
-        # 底层背景：画出原始的含有相位偏移的截面数据束 (灰色)
-        # 用原始数据作为最强力的对照组，根本不需要所谓的 Ground Truth！
+        # Background: Plot the original cross-sectional data bundle with phase shifts (gray)
+        # Use the raw data as the strongest control group, no need for a so-called Ground Truth!
         ax.plot(X_grid, Y_slice.T, color='#bdc3c7', alpha=0.15, lw=1, zorder=1)
 
-        # 顶层：估算出的中心泛函曲线
+        # Top layer: Estimated central functional curve
         est_curve = centers_dict[method][t_idx]
         ax.plot(X_grid, est_curve, color=colors[i], lw=5, zorder=5, label='Estimated Center Curve')
 
@@ -317,16 +310,16 @@ def plot_dynamic_functional_2x5(T, X_grid, Y, t_eval, centers_dict, target_t=7.5
         import os
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"✅ 动态泛函削峰 2x5 对比图已保存至: {save_path}")
+        print(f"Dynamic functional peak-shaving 2x5 comparison chart saved to: {save_path}")
     plt.show()
 
 
-# utils/visualization.py 替换代码
+# utils/visualization.py replacement code
 
 def plot_functional_depth_coloring(X_grid, Y_slice, nw_ranks, amqr_ranks, top_ratio=0.20, save_path=None):
     """
-    🌟 升级版：绘制泛函曲线的深度分位数染色对比图
-    支持手动指定只染色前百分之几 (top_ratio) 的核心曲线，其余曲线作为灰色背景。
+    Plot a depth quantile coloring comparison chart for functional curves
+    Supports manually specifying to color only the top percentage (top_ratio) of core curves, with the rest as a gray background.
     """
     import matplotlib.pyplot as plt
     import os
@@ -334,23 +327,23 @@ def plot_functional_depth_coloring(X_grid, Y_slice, nw_ranks, amqr_ranks, top_ra
 
     fig, axes = plt.subplots(1, 2, figsize=(22, 8), facecolor='white')
 
-    # 使用 viridis 倒序，核心(Rank=0)为亮黄色，边界(Rank=top_ratio)为深紫色
+    # Use reversed viridis, core (Rank=0) is bright yellow, boundary (Rank=top_ratio) is dark purple
     cmap = 'viridis_r'
 
-    # --- 图 1: 欧氏环境深度染色 (NW Euclidean Ranks) ---
+    # --- Plot 1: Euclidean ambient depth coloring (NW Euclidean Ranks) ---
     ax1 = axes[0]
 
-    # 1. 先画背景 (超过 top_ratio 的曲线) 作为灰色基底
+    # 1. First, draw the background (curves exceeding top_ratio) as a gray base
     mask_nw_bg = nw_ranks > top_ratio
     ax1.plot(X_grid, Y_slice[mask_nw_bg].T, color='#bdc3c7', alpha=0.15, lw=1, zorder=1)
 
-    # 2. 再画前景核心管 (从边缘向中心画，保证最核心的黄色覆盖在最上层)
+    # 2. Then, draw the foreground core tube (draw from the edge to the center to ensure the most central yellow is on top)
     idx_nw_fg = np.where(nw_ranks <= top_ratio)[0]
-    # 按 rank 降序排列 (先画靠近边缘的，再画靠近中心的)
+    # Sort by rank in descending order (draw those closer to the edge first, then those closer to the center)
     idx_nw_fg = idx_nw_fg[np.argsort(nw_ranks[idx_nw_fg])[::-1]]
 
     for idx in idx_nw_fg:
-        # 颜色归一化：将 0 ~ top_ratio 映射到完整的 0~1 色带，实现管内对比度最大化
+        # Color normalization: Map 0 ~ top_ratio to the full 0~1 color band to maximize contrast within the tube
         norm_rank = nw_ranks[idx] / top_ratio
         ax1.plot(X_grid, Y_slice[idx], color=plt.get_cmap(cmap)(norm_rank), alpha=0.85, lw=2.5, zorder=5)
 
@@ -361,14 +354,12 @@ def plot_functional_depth_coloring(X_grid, Y_slice, nw_ranks, amqr_ranks, top_ra
     ax1.set_ylabel("Amplitude", fontsize=16)
     ax1.set_ylim(-0.5, 3.5)
 
-    # --- 图 2: AMQR 内蕴拓扑深度染色 (Proposed) ---
+    # --- Plot 2: AMQR intrinsic topological depth coloring (Proposed) ---
     ax2 = axes[1]
 
-    # 1. 画背景
     mask_amqr_bg = amqr_ranks > top_ratio
     ax2.plot(X_grid, Y_slice[mask_amqr_bg].T, color='#bdc3c7', alpha=0.15, lw=1, zorder=1)
 
-    # 2. 画前景
     idx_amqr_fg = np.where(amqr_ranks <= top_ratio)[0]
     idx_amqr_fg = idx_amqr_fg[np.argsort(amqr_ranks[idx_amqr_fg])[::-1]]
 
@@ -382,14 +373,14 @@ def plot_functional_depth_coloring(X_grid, Y_slice, nw_ranks, amqr_ranks, top_ra
     ax2.set_xlabel("Functional Domain (X)", fontsize=16)
     ax2.set_ylim(-0.5, 3.5)
 
-    # --- 统一全局 Colorbar ---
+    # --- Unified global Colorbar ---
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=top_ratio * 100))
     sm.set_array([])
     cbar_ax = fig.add_axes([0.92, 0.15, 0.015, 0.7])
     cbar = fig.colorbar(sm, cax=cbar_ax)
     cbar.set_label(f"Center-outward Quantile Depth (0% to {int(top_ratio * 100)}%)", fontsize=16, fontweight='bold',
                    labelpad=15)
-    cbar.ax.invert_yaxis()  # 让 0% (核心) 在最上方
+    cbar.ax.invert_yaxis()  # Put 0% (core) at the top
     cbar.ax.tick_params(labelsize=14)
 
     for ax in [ax1, ax2]:
@@ -400,7 +391,7 @@ def plot_functional_depth_coloring(X_grid, Y_slice, nw_ranks, amqr_ranks, top_ra
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"✅ 泛函曲线(Top {int(top_ratio * 100)}%)深度染色对比图已保存至: {save_path}")
+        print(f"Functional curve (Top {int(top_ratio * 100)}%) depth coloring comparison chart saved to: {save_path}")
     plt.show()
 
 
@@ -411,13 +402,11 @@ def plot_spd_3x5_comparison(Y_flat, results_dict, dim=2, filename=None):
     from sklearn.decomposition import PCA
     from utils.metrics import compute_spd_all_props
 
-    # 画布放大，容纳 5 列
     fig, axes = plt.subplots(3, 5, figsize=(36, 18), facecolor='white')
     raw_dets, raw_eigs, raw_log_Y = compute_spd_all_props(Y_flat, dim=dim)
     pca = PCA(n_components=2)
     Y_pca = pca.fit_transform(raw_log_Y)
 
-    # 包含全 5 种方法的标题
     col_titles = [
         "Ambient NW Mean",
         "Fréchet L2 Mean",
@@ -438,7 +427,6 @@ def plot_spd_3x5_comparison(Y_flat, results_dict, dim=2, filename=None):
         m_pca = pca.transform(m_log)[0]
         mask = ranks <= u_target
 
-        # 颜色阶梯：前3个红色系，KDE紫色，AMQR绿色
         m_color = '#c0392b' if j < 3 else ('#8e44ad' if j == 3 else '#27ae60')
         symbol = '*' if m_key == 'amqr' else 'X'
         size = 800 if m_key == 'amqr' else 500
@@ -454,7 +442,6 @@ def plot_spd_3x5_comparison(Y_flat, results_dict, dim=2, filename=None):
         ax1.hist(clipped_mask, bins=custom_bins, color=m_color, alpha=0.8, edgecolor='white', zorder=2,
                  label="Top 20% Core")
 
-        # 删除了真实的体积参考线，只保留模型估计线的标示
         ax1.axvline(m_det[0], color='black', lw=2.5, ls='--', zorder=4, label=f"Est. Det: {m_det[0]:.2f}")
 
         ax1.set_xlim(0, zoom_max)
@@ -467,7 +454,6 @@ def plot_spd_3x5_comparison(Y_flat, results_dict, dim=2, filename=None):
         sc = ax2.scatter(raw_eigs[:, -1], raw_eigs[:, 0], c=ranks, cmap=cmap_choice, s=50, alpha=0.7, edgecolor='w',
                          lw=0.2)
 
-        # 删除了真实的特征值星星，仅展示数据背景和模型的预估中心
         ax2.scatter(m_eig[0, -1], m_eig[0, 0], marker=symbol, color='#00FF00', s=size, edgecolor='black', lw=2,
                     zorder=5)
 
@@ -479,12 +465,10 @@ def plot_spd_3x5_comparison(Y_flat, results_dict, dim=2, filename=None):
         ax3 = axes[2, j]
         ax3.scatter(Y_pca[:, 0], Y_pca[:, 1], c=ranks, cmap=cmap_choice, s=50, alpha=0.7, edgecolor='w', lw=0.2)
 
-        # 删除了真实的 PCA 星星，仅保留模型的预估中心
         ax3.scatter(m_pca[0], m_pca[1], marker=symbol, color='#00FF00', s=size, edgecolor='black', lw=2, zorder=5)
 
         if j == 0: ax3.set_ylabel(row_titles[2], fontsize=16, fontweight='bold')
 
-    # 全局美化设置
     for ax in axes.flat:
         ax.set_xticks([])
         ax.set_yticks([])
@@ -497,40 +481,40 @@ def plot_spd_3x5_comparison(Y_flat, results_dict, dim=2, filename=None):
     if filename:
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         plt.savefig(filename, dpi=150, bbox_inches='tight')
-        print(f"✅ 纯数据驱动版 3x5 对比大图已保存至: {filename}")
+        print(f"Purely data-driven 3x5 large comparison chart saved to: {filename}")
     plt.show()
 
 
 def compute_traces(Y_flat, dim=20):
-    """计算矩阵的迹，代表总体波动体积"""
+    """Calculate the trace of a matrix, representing the total fluctuation volume"""
     return np.array([np.trace(y.reshape(dim, dim)) for y in Y_flat])
 
 
 def plot_traffic_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, save_dir, dim=20):
-    """绘制 1x3 的交通流形管道演化与特征值谱拓扑图"""
+    """Plot a 1x3 chart of traffic manifold tube evolution and eigenvalue spectrum topology"""
     import os
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     import seaborn as sns
 
-    print("🎨 正在渲染 1x3 交通流形管道与特征谱图...")
+    print("Rendering 1x3 traffic manifold tube and eigenspectrum chart...")
     fig, axes = plt.subplots(1, 3, figsize=(28, 8), facecolor='white')
     cmap_choice = 'plasma'
 
-    # 计算迹 (Trace)
+    # Calculate Trace
     raw_traces = np.array([np.trace(y.reshape(dim, dim)) for y in Y_flat])
     reg_traces_sparse = np.array([np.trace(y.reshape(dim, dim)) for y in Y_reg_sparse])
 
-    # 排序以防止绘图时的随机遮挡
+    # Sort to prevent random occlusion during plotting
     sort_idx = np.argsort(a_ranks)
     T_sorted = T[sort_idx]
     raw_traces_sorted = raw_traces[sort_idx]
     a_ranks_sorted = a_ranks[sort_idx]
 
-    # --- 视图 A: 交通流形渐变管道 ---
+    # --- View A: Traffic manifold gradient tube ---
     ax1 = axes[0]
-    # 加入微小 jitter 让散点更清晰
+    # Add minor jitter to make scatter points clearer
     jitter = np.random.uniform(-0.35, 0.35, len(T_sorted))
 
     sc_tube = ax1.scatter(T_sorted + jitter, raw_traces_sorted, c=a_ranks_sorted,
@@ -547,24 +531,23 @@ def plot_traffic_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, sav
     ax1.legend(loc='upper left', fontsize=12)
 
     # =========================================================================
-    # 🌟 终极替换：视图 B - SPD 矩阵特征值谱分析 (Eigen-Spectrum Analysis)
-    # 完全抛弃有缺陷的 PCA，用严谨的谱几何展示拓扑畸变！
+    # View B - SPD Matrix Eigen-Spectrum Analysis
     # =========================================================================
     ax2 = axes[1]
 
-    # 提取所有矩阵的特征值
+    # Extract eigenvalues of all matrices
     eigs = np.array([np.linalg.eigvalsh(y.reshape(dim, dim) + np.eye(dim) * 1e-5) for y in Y_flat])
 
-    l_mean = np.mean(eigs, axis=1)  # X轴：系统整体底噪 (Scale)
+    l_mean = np.mean(eigs, axis=1)  # X-axis: System's overall background noise (Scale)
     l_max = eigs[:, -1]
 
-    # 🚨 终极核武器：计算“各向异性比例”，纯粹衡量形状的畸变程度！
+    # Calculate 'anisotropy ratio', purely measuring the degree of shape distortion!
     anisotropy_ratio = l_max / l_mean
 
-    # 倒序排列，确保深紫色核心最后画
+    # Sort in reverse order to ensure the dark purple core is drawn last
     sort_idx_pca = np.argsort(a_ranks)[::-1]
     l_mean_sorted = l_mean[sort_idx_pca]
-    aniso_sorted = anisotropy_ratio[sort_idx_pca]  # 替换为比例
+    aniso_sorted = anisotropy_ratio[sort_idx_pca]  # Replace with ratio
     a_ranks_pca_sorted = a_ranks[sort_idx_pca]
 
     sc_eig = ax2.scatter(l_mean_sorted, aniso_sorted, c=a_ranks_pca_sorted,
@@ -575,7 +558,7 @@ def plot_traffic_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, sav
     ax2.set_ylabel("Shape Distortion: Ratio $\lambda_{max} / \lambda_{mean}$", fontsize=14)
     ax2.set_xscale('log')
 
-    # --- 视图 C: 箱线图 ---
+    # --- View C: Boxplot ---
     ax3 = axes[2]
     labels = ['Core\n(0-20%)', 'Low\n(20-40%)', 'Mid\n(40-60%)', 'High\n(60-80%)', 'Anomaly\n(80-100%)']
     rank_categories = pd.cut(a_ranks, bins=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0], labels=labels, include_lowest=True)
@@ -583,7 +566,7 @@ def plot_traffic_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, sav
     ax3.set_title("3. Unsupervised Traffic Anomaly Isolation", fontsize=18, fontweight='bold', pad=15)
     ax3.set_ylabel("Raw Network Volatility ($\log_{10}$ Trace)", fontsize=14)
 
-    # 统一色条
+    # Unified colorbar
     cbar_ax = fig.add_axes([0.62, 0.15, 0.012, 0.7])
     fig.colorbar(sc_eig, cax=cbar_ax).set_label("AMQR Anomaly Quantile", fontsize=16, fontweight='bold')
 
@@ -592,22 +575,22 @@ def plot_traffic_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, sav
     save_path = os.path.join(save_dir, "Fig_1x3_Traffic_Tube.pdf")
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"✅ 1x3 严谨版管道图谱已保存至: {save_path}")
+    print(f"1x3 tube chart saved to: {save_path}")
 
 
 def plot_spatial_grid(Y_flat, scores, T, coords, save_dir, dim=20):
     """
-    绘制 3x4 地理拓扑空间演化网格图 (局部条件分位数版)
-    注意：这里传入的是绝对异常距离 scores，而不是全局 a_ranks！
+    Plot a 3x4 grid chart of geospatial topological evolution (local conditional quantile version)
+    Note: The input here is the absolute anomaly distance scores, not the global a_ranks!
     """
-    print("🎨 正在渲染 3x4 地理空间拓扑演化大图 (Local Quantiles)...")
+    print("Rendering 3x4 large chart of geospatial topological evolution (Local Quantiles)...")
     target_hours = [6, 12, 18, 0]
     col_labels = ["6:00\n(Morning Wake-up)", "12:00\n(Noon Steady)", "18:00\n(Evening Rush)", "0:00\n(Midnight Sleep)"]
     row_labels = ["Local u ≈ 0.1\n(Healthy Core)", "Local u ≈ 0.5\n(Congestion)", "Local u ≈ 0.9\n(Severe Gridlock)"]
 
     fig, axes = plt.subplots(3, 4, figsize=(24, 18), facecolor='#f8f9fa')
 
-    # 定义画线阈值
+    # Define line drawing thresholds
     THRESHOLD_RED = 0.8
     THRESHOLD_BLUE = -0.5
     THRESHOLD_GRAY = 0.2
@@ -619,11 +602,11 @@ def plot_spatial_grid(Y_flat, scores, T, coords, save_dir, dim=20):
 
         hour_Y = Y_flat[indices]
 
-        # 🌟 核心升级：独立计算“当前小时内”的局部排秩！
+        # Independently calculate the local ranks 'within the current hour'!
         local_scores = scores[indices]
         hour_ranks = rankdata(local_scores) / len(local_scores)
 
-        # 在局部的三大分位数区间内寻找最真实的代表日 (Medoid)
+        # Find the most representative day (Medoid) within the three major local quantile intervals
         mask_u0 = (hour_ranks <= 0.2)
         mask_u05 = (hour_ranks >= 0.4) & (hour_ranks <= 0.6)
         mask_u1 = (hour_ranks >= 0.8)
@@ -637,31 +620,31 @@ def plot_spatial_grid(Y_flat, scores, T, coords, save_dir, dim=20):
             sub_Y = hour_Y[mask]
             sub_ranks = hour_ranks[mask]
 
-            # 找到最贴近目标的真实样本
+            # Find the true sample closest to the target
             target_u = [0.1, 0.5, 0.9][row_idx]
             medoid_idx = np.argmin(np.abs(sub_ranks - target_u))
             real_cov = sub_Y[medoid_idx].reshape(dim, dim)
 
-            # 转化为相关系数矩阵
+            # Convert to correlation coefficient matrix
             d = np.sqrt(np.diag(real_cov))
             d[d == 0] = 1e-5
             corr_mat = real_cov / np.outer(d, d)
 
-            # --- 开始在当前子图上绘制地理信息 ---
+            # --- Start drawing geographic information on the current subplot ---
             ax.scatter(coords[:, 0], coords[:, 1], s=40, c='#2c3e50', zorder=5, edgecolor='w', lw=1)
 
             for i in range(dim):
                 for j in range(i + 1, dim):
                     c_val = corr_mat[i, j]
-                    # 断流撕裂 (强负相关) -> 蓝色
+                    # Flow disruption (strong negative correlation) -> Blue
                     if c_val < THRESHOLD_BLUE:
                         ax.plot([coords[i, 0], coords[j, 0]], [coords[i, 1], coords[j, 1]],
                                 color='dodgerblue', linewidth=abs(c_val) * 3.5, alpha=0.9, zorder=2)
-                    # 死锁拥堵 (强正相关) -> 红色
+                    # Deadlock congestion (strong positive correlation) -> Red
                     elif c_val > THRESHOLD_RED:
                         ax.plot([coords[i, 0], coords[j, 0]], [coords[i, 1], coords[j, 1]],
                                 color='crimson', linewidth=c_val * 3, alpha=0.75, zorder=1)
-                    # 微弱关联 -> 灰色
+                    # Weak correlation -> Gray
                     elif abs(c_val) > THRESHOLD_GRAY:
                         ax.plot([coords[i, 0], coords[j, 0]], [coords[i, 1], coords[j, 1]],
                                 color='gray', linewidth=0.3, alpha=0.2, zorder=0)
@@ -675,7 +658,7 @@ def plot_spatial_grid(Y_flat, scores, T, coords, save_dir, dim=20):
             if row_idx == 0: ax.set_title(col_labels[col_idx], fontsize=18, fontweight='bold', pad=15)
             if col_idx == 0: ax.set_ylabel(row_labels[row_idx], fontsize=18, fontweight='bold', labelpad=15)
 
-    # 底部图例
+    # Bottom legend
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], color='crimson', lw=4, label='Gridlock (Severe Positive Corr)'),
@@ -692,14 +675,14 @@ def plot_spatial_grid(Y_flat, scores, T, coords, save_dir, dim=20):
     save_path = os.path.join(save_dir, "Fig_3x4_Spatial_Evolution.pdf")
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"✅ 3x4 地理拓扑演化大图(局部条件版)已保存至: {save_path}")
+    print(f"3x4 large chart of geospatial topological evolution (local conditional version) saved to: {save_path}")
 
 
 def plot_local_matrix_grid(Y_flat, scores, T, save_dir, dim=20):
     """
-    绘制 3x4 流形拓扑演化热力图 (基于局部条件分位数 Local Quantiles)
+    Plot a 3x4 heatmap of manifold topological evolution (based on Local Conditional Quantiles)
     """
-    print("🎨 正在渲染 3x4 局部条件分位数拓扑热力图...")
+    print("Rendering 3x4 local conditional quantile topological heatmap...")
     target_hours = [6, 12, 18, 0]
     col_labels = ["6:00\n(Morning Wake-up)", "12:00\n(Noon Steady)", "18:00\n(Evening Rush)", "0:00\n(Midnight Sleep)"]
     row_labels = ["Local u ≈ 0.1\n(Healthy Core)", "Local u ≈ 0.5\n(Congestion)", "Local u ≈ 0.9\n(Severe Anomaly)"]
@@ -713,11 +696,11 @@ def plot_local_matrix_grid(Y_flat, scores, T, save_dir, dim=20):
 
         hour_Y = Y_flat[indices]
 
-        # 🌟 核心：独立计算“当前小时内”的局部排秩
+        # Independently calculate the local ranks 'within the current hour'
         local_scores = scores[indices]
         hour_ranks = rankdata(local_scores) / len(local_scores)
 
-        # 定义局部分位数区间
+        # Define local quantile intervals
         mask_u0 = (hour_ranks <= 0.2)
         mask_u05 = (hour_ranks >= 0.4) & (hour_ranks <= 0.6)
         mask_u1 = (hour_ranks >= 0.8)
@@ -731,22 +714,20 @@ def plot_local_matrix_grid(Y_flat, scores, T, save_dir, dim=20):
             sub_Y = hour_Y[mask]
             sub_ranks = hour_ranks[mask]
 
-            # 找到最贴近目标的真实历史样本 (Medoid)
+            # Find the true historical sample closest to the target (Medoid)
             target_u = [0.1, 0.5, 0.9][row_idx]
             medoid_idx = np.argmin(np.abs(sub_ranks - target_u))
             real_cov = sub_Y[medoid_idx].reshape(dim, dim)
 
-            # 转化为相关系数矩阵，聚焦纯粹的拓扑形态
+            # Convert to correlation coefficient matrix, focusing on pure topological form
             d = np.sqrt(np.diag(real_cov))
             d[d == 0] = 1e-5
             corr_mat = real_cov / np.outer(d, d)
 
-            # 🌟 修改 1：彻底屏蔽 seaborn 自带的 cbar，保证 12 个子图尺寸绝对统一！
             sns.heatmap(corr_mat, ax=ax, cmap='coolwarm', vmin=-1, vmax=1,
                         square=True, cbar=False,
                         xticklabels=False, yticklabels=False)
 
-            # 边框和标题美化
             if row_idx == 0: ax.set_title(col_labels[col_idx], fontsize=18, fontweight='bold', pad=20)
             if col_idx == 0: ax.set_ylabel(row_labels[row_idx], fontsize=18, fontweight='bold', labelpad=20)
 
@@ -758,14 +739,14 @@ def plot_local_matrix_grid(Y_flat, scores, T, save_dir, dim=20):
     plt.suptitle("Microscopic Topological Evolution\n(Time-of-Day vs. Local AMQR Manifold Quantile)",
                  fontsize=24, fontweight='bold', y=1.02)
 
-    # 将主体子图区域向左挤压一点，给右侧全局 Colorbar 留出充足空间
+    # Squeeze the main subplot area to the left to leave enough space for the global Colorbar on the right
     plt.subplots_adjust(right=0.9, wspace=0.1, hspace=0.15)
 
-    # 🌟 修改 2：构建全局统一的 ScalarMappable 颜色映射条
+    # Construct a globally unified ScalarMappable color map bar
     cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
     norm = mcolors.Normalize(vmin=-1, vmax=1)
     sm = cm.ScalarMappable(cmap='coolwarm', norm=norm)
-    sm.set_array([])  # 必须加上这句，初始化空数据
+    sm.set_array([])  # This line must be added to initialize with empty data
 
     cbar = fig.colorbar(sm, cax=cbar_ax)
     cbar.set_label("Pearson Correlation", fontsize=18, fontweight='bold', labelpad=20)
@@ -775,21 +756,21 @@ def plot_local_matrix_grid(Y_flat, scores, T, save_dir, dim=20):
     save_path = os.path.join(save_dir, "Fig_3x4_Local_Matrix_Heatmap.pdf")
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"✅ 3x4 局部条件热力大图已保存至: {save_path}")
+    print(f"3x4 large local conditional heatmap saved to: {save_path}")
 
 
 def plot_eeg_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, labels, anomaly_scores, save_dir, dim=23):
     """
-    绘制 1x3 的脑电波 (EEG) 流形演化与无监督发病检测图
+    Plot a 1x3 chart of EEG manifold evolution and unsupervised seizure detection
     """
-    print("🎨 正在渲染 1x3 脑电波流形诊断图谱...")
+    print("Rendering 1x3 EEG manifold diagnostic chart...")
     fig, axes = plt.subplots(1, 3, figsize=(28, 8), facecolor='white')
     cmap_choice = 'plasma'
 
     raw_traces = np.array([np.trace(y.reshape(dim, dim)) for y in Y_flat])
     reg_traces_sparse = np.array([np.trace(y.reshape(dim, dim)) for y in Y_reg_sparse])
 
-    # 提取医生标注的真实发病时间段 (用于画红色警报背景)
+    # Extract the true seizure period annotated by doctors (used for the red alert background)
     seizure_indices = np.where(labels == 1)[0]
     if len(seizure_indices) > 0:
         seizure_start_t = T[seizure_indices[0]]
@@ -797,9 +778,10 @@ def plot_eeg_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, labels,
     else:
         seizure_start_t, seizure_end_t = None, None
 
-    # --- 视图 A: 脑网络流形渐变管道 (伴随发病期高亮) ---
+    # --- View A: Brain network manifold gradient tube (with seizure period highlighted) ---
     ax1 = axes[0]
-    # 排序以防高分点被遮挡
+    
+    # Sort to prevent high-scoring points from being obscured
     sort_idx = np.argsort(a_ranks)
     T_sorted = T[sort_idx]
     raw_traces_sorted = raw_traces[sort_idx]
@@ -808,7 +790,7 @@ def plot_eeg_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, labels,
     sc_tube = ax1.scatter(T_sorted, raw_traces_sorted, c=a_ranks_sorted,
                           cmap=cmap_choice, s=25, alpha=0.9, zorder=3, vmin=0.0, vmax=1.0, edgecolor='none')
 
-    # 🌟 核心医学佐证：画出真实的癫痫发作区间 (红色背景)
+    # Plot the true seizure interval (red background)
     if seizure_start_t is not None:
         ax1.axvspan(seizure_start_t, seizure_end_t, color='lightcoral', alpha=0.3, zorder=1,
                     label='Ground Truth: Seizure')
@@ -822,7 +804,7 @@ def plot_eeg_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, labels,
     ax1.set_yscale('log')
     ax1.legend(loc='upper right', fontsize=12)
 
-    # --- 视图 B: 切空间 PCA (健康 vs 癫痫 拓扑撕裂) ---
+    # --- View B: Tangent space PCA (Healthy vs Seizure topological tear) ---
     ax2 = axes[1]
     import scipy.linalg
     Y_log_flat = np.array([scipy.linalg.logm(y.reshape(dim, dim) + np.eye(dim) * 1e-5).real.flatten() for y in Y_flat])
@@ -833,7 +815,7 @@ def plot_eeg_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, labels,
     sc_pca = ax2.scatter(Y_pca_sorted[:, 0], Y_pca_sorted[:, 1], c=a_ranks_sorted,
                          cmap=cmap_choice, s=35, alpha=0.8, edgecolor='none', vmin=0.0, vmax=1.0)
 
-    # 如果有真实的癫痫点，在 PCA 里用红色空心圆圈圈出来，证明它们确实在拓扑边缘！
+    # If there are true seizure points, circle them in the PCA with red hollow circles to prove they are indeed on the topological edge!
     if seizure_start_t is not None:
         seizure_pca = Y_pca[labels == 1]
         ax2.scatter(seizure_pca[:, 0], seizure_pca[:, 1], facecolors='none', edgecolors='red',
@@ -843,16 +825,16 @@ def plot_eeg_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, labels,
     ax2.set_title("2. Tangent Space PCA (Pathological Shift)", fontsize=18, fontweight='bold', pad=15)
     ax2.set_xlabel("Principal Component 1", fontsize=14)
 
-    # --- 视图 C: 无监督异常得分追踪 (医学时序诊断图) ---
+    # --- View C: Unsupervised anomaly score tracking (medical time-series diagnostic chart) ---
     ax3 = axes[2]
-    # 画出模型给出的每一秒的绝对异常得分
+    # Plot the absolute anomaly score given by the model for each second
     ax3.plot(T, anomaly_scores, color='#2c3e50', lw=2, zorder=3, label='AMQR Anomaly Score')
     ax3.fill_between(T, anomaly_scores, color='#34495e', alpha=0.2, zorder=2)
 
-    # 再次画出红色的真实发病底色，形成强烈对比！
+    # Plot the red true seizure background again to form a strong contrast!
     if seizure_start_t is not None:
         ax3.axvspan(seizure_start_t, seizure_end_t, color='lightcoral', alpha=0.3, zorder=1)
-        # 在发病区域标上文字
+        # Add text in the seizure area
         ax3.text(seizure_start_t + 10, np.max(anomaly_scores) * 0.9, 'Seizure\nOnset',
                  color='red', fontweight='bold', fontsize=12)
 
@@ -861,7 +843,7 @@ def plot_eeg_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, labels,
     ax3.set_ylabel("AMQR Absolute Topological Distance", fontsize=14)
     ax3.legend(loc='upper left', fontsize=12)
 
-    # 统一 Colorbar
+    # Unified Colorbar
     cbar_ax = fig.add_axes([0.62, 0.15, 0.012, 0.7])
     fig.colorbar(sc_pca, cax=cbar_ax).set_label("AMQR Anomaly Quantile", fontsize=16, fontweight='bold')
 
@@ -872,4 +854,4 @@ def plot_eeg_tube_validation(T, Y_flat, t_sparse, Y_reg_sparse, a_ranks, labels,
     save_path = os.path.join(save_dir, "Fig_1x3_EEG_Detection.jpg")
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"✅ EEG 脑电无监督诊断图谱已保存至: {save_path}")
+    print(f"EEG unsupervised diagnostic chart saved to: {save_path}")
