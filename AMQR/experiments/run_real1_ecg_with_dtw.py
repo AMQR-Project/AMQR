@@ -15,7 +15,7 @@ except ImportError:
 try:
     from tslearn.metrics import cdist_dtw
 except ImportError:
-    print("⚠️ 致命错误: 未检测到 tslearn 库。请运行 'pip install tslearn'。")
+    print("Error: tslearn library not detected. Please run 'pip install tslearn'.")
     sys.exit(1)
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -24,25 +24,25 @@ from models.amqr_engine import AMQR_Engine
 
 
 def plot_single_panel(ax, X_grid, Y_curves, ranks, center_curve, nw_mean, title, center_label, rank_label):
-    """绘制单个面板的辅助函数"""
+    """Helper function to plot a single panel"""
     cmap = cm.get_cmap('viridis_r')
     norm = mcolors.Normalize(vmin=0.0, vmax=1.0)
 
-    # 渐变染色
+    # Gradient coloring
     for i, curve in enumerate(Y_curves):
         r = ranks[i]
         color = cmap(norm(r))
         alpha_val = max(0.15, 0.8 - 0.7 * r)
         ax.plot(X_grid, curve, color=color, alpha=alpha_val, linewidth=1.0, zorder=1)
 
-    # NW 均值
+    # NW mean
     ax.plot(X_grid, nw_mean, color='blue', linewidth=3, linestyle='--',
             label='NW Mean (Amplitude Dampening)', zorder=3)
 
-    # 中心曲线
+    # Center curve
     ax.plot(X_grid, center_curve, color='crimson', linewidth=4, label=center_label, zorder=5)
 
-    # 完善图表元素
+    # Finalize plot elements
     ax.set_title(title, fontsize=14, fontweight='bold')
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Voltage (mV)")
@@ -56,10 +56,10 @@ if __name__ == "__main__":
     np.random.seed(42)
 
     print("========================================================")
-    print(" 🌟 Real Application 2: AMQR vs. DTW (Dual Panel)")
+    print(" Real Application: AMQR vs. DTW (Dual Panel)")
     print("========================================================")
 
-    # 1. 提取并切割 ECG 数据
+    # 1. Extract and segment ECG data
     ecg_signal = electrocardiogram()
     fs = 360
     signal_segment = ecg_signal[:60 * fs]
@@ -78,25 +78,22 @@ if __name__ == "__main__":
     N = len(Y_curves)
     nw_mean = np.mean(Y_curves, axis=0)
 
-    # 2. 计算 DTW 基线
-    print("⏳ 计算 DTW 距离矩阵与 Medoid...")
+    # 2. Calculate DTW baseline
+    print("Calculating DTW distance matrix and Medoid...")
     dtw_matrix = cdist_dtw(Y_curves)
     dtw_medoid_idx = np.argmin(dtw_matrix.sum(axis=1))
     dtw_medoid = Y_curves[dtw_medoid_idx]
     dtw_ranks = rankdata(dtw_matrix[dtw_medoid_idx]) / N
 
-    # 3. 计算 AMQR 方法
-    print("⏳ 执行 AMQR 高维流形拓扑对齐 (Exact GW without Entropic Blurring)...")
+    # 3. Calculate AMQR method
+    print("Executing AMQR high-dimensional manifold topological alignment (Exact GW without Entropic Blurring)...")
     amqr = AMQR_Engine(ref_dist='uniform', use_knn=True, k_neighbors=5, d_int=None, epsilon=0.0)
-
-    # 🌟 统一论调：在 \epsilon=0 时，AMQR 并非在造假合成，而是在做内蕴拓扑检索 (Intrinsic Retrieval)
-    # 它在观测样本中提取了受局部相位噪声影响最小的“拓扑滤波器 (Topological Filter)”原型
     amqr_median, amqr_ranks = amqr.fit_predict(Y_curves, T=None)
 
-    # 4. 创建上下双面板图表
+    # 4. Create a dual-panel plot (top and bottom)
     fig, axes = plt.subplots(2, 1, figsize=(12, 5), sharex=True)
 
-    # 绘制 Panel A (DTW)
+    # Plot Panel A (DTW)
     cmap1, norm1 = plot_single_panel(
         axes[0], X_grid, Y_curves, dtw_ranks, dtw_medoid, nw_mean,
         title="(A) Baseline: ECG Center-Outward Ranking via DTW Fréchet Depth",
@@ -108,11 +105,11 @@ if __name__ == "__main__":
     cbar1 = fig.colorbar(sm1, ax=axes[0], pad=0.01)
     cbar1.set_label('DTW Distance Rank ($u_{DTW}$)', rotation=270, labelpad=15, fontweight='bold')
 
-    # 绘制 Panel B (AMQR) - 🚨 标签全部更新！
+    # Plot Panel B (AMQR)
     cmap2, norm2 = plot_single_panel(
         axes[1], X_grid, Y_curves, amqr_ranks, amqr_median, nw_mean,
-        title="(B) Proposed: ECG Prototype Discovery via AMQR Topological Filter", # 🌟 改成了 Prototype Discovery
-        center_label="AMQR Topological Median (Intrinsic Retrieval)",              # 🌟 改成了 Intrinsic Retrieval
+        title="(B) Proposed: ECG Prototype Discovery via AMQR Topological Filter",
+        center_label="AMQR Topological Median (Intrinsic Retrieval)",
         rank_label="AMQR Topological Quantile Rank ($u$)"
     )
     sm2 = plt.cm.ScalarMappable(cmap=cmap2, norm=norm2)
@@ -125,4 +122,4 @@ if __name__ == "__main__":
     save_path = os.path.join(PROJECT_ROOT, "results", "figures", "Fig8_Dual_Comparison.pdf")
     plt.savefig(save_path, dpi=100)
     plt.show()
-    print(f"🎉 双面板图表已生成: {save_path}")
+    print(f"Dual-panel plot has been generated: {save_path}")
