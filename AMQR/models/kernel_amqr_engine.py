@@ -56,8 +56,17 @@ class Kernel_AMQR_Engine:
         if self.kernel == 'precomputed':
             K = Y_flat.copy()
         else:
-            K = pairwise_kernels(Y_flat, Y_flat, metric=self.kernel,
-                                 gamma=self.gamma, degree=self.degree, coef0=self.coef0)
+            # 动态组装当前核函数支持的参数字典
+            kernel_kwargs = {}
+            if self.gamma is not None:
+                kernel_kwargs['gamma'] = self.gamma
+            if self.kernel == 'poly':
+                kernel_kwargs['degree'] = self.degree
+                kernel_kwargs['coef0'] = self.coef0
+            elif self.kernel == 'sigmoid':
+                kernel_kwargs['coef0'] = self.coef0
+
+            K = pairwise_kernels(Y_flat, Y_flat, metric=self.kernel, **kernel_kwargs)
 
         # =========================================================
         # 2. 从核矩阵提取 RKHS 空间中的纯正欧氏距离 Cy
