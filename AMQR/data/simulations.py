@@ -6,8 +6,8 @@ from scipy.stats import ortho_group
 
 def generate_circular_manifold_with_gap(n_points=15000):
     """
-    生成带有 135° 拓扑断层的 3D 螺旋/圆柱流形点云。
-    用于测试模型在遭遇“真空断层”时的拓扑鲁棒性。
+    Generate a 3D spiral/cylindrical manifold point cloud with a 135° topological gap.
+    Used to test the model's topological robustness when encountering a "vacuum gap".
     """
     np.random.seed(42)
     T = np.random.uniform(0, 10, n_points)
@@ -15,13 +15,13 @@ def generate_circular_manifold_with_gap(n_points=15000):
     theta_center = T * (np.pi / 2.5)
     theta = np.random.vonmises(mu=theta_center, kappa=1.5, size=n_points)
 
-    # 制造 135° (3π/4) 处的断层
+    # Create a gap at 135° (3π/4)
     rel_theta = (theta - theta_center + np.pi) % (2 * np.pi) - np.pi
     gap_center = 3 * np.pi / 4
     gap_width = 0.5
     in_gap = np.abs(rel_theta - gap_center) < gap_width
 
-    # 在 gap 区域只保留 2% 的点，形成真空区
+    # Keep only 2% of the points in the gap region to form a vacuum zone
     keep_prob = np.where(in_gap, 0.02, 1.0)
     keep_mask = np.random.rand(n_points) < keep_prob
 
@@ -29,7 +29,7 @@ def generate_circular_manifold_with_gap(n_points=15000):
     Y1, Y2 = R * np.cos(theta), R * np.sin(theta)
     P_3D = np.column_stack([T, Y1, Y2])
 
-    # 生成绝对真实的骨架 Ground Truth
+    # Generate the absolute real skeleton Ground Truth
     T_gt = np.linspace(0, 10, 200)
     theta_gt = T_gt * (np.pi / 2.5)
     GT_3D = np.column_stack([T_gt, 3.0 * np.cos(theta_gt), 3.0 * np.sin(theta_gt)])
@@ -39,16 +39,16 @@ def generate_circular_manifold_with_gap(n_points=15000):
 
 def generate_bimodal_crescent():
     """
-    生成带有稀疏桥梁的双峰月牙流形 (Bimodal Crescent)。
-    特点：两端密度极高，中间连接处极度稀疏。
-    用于测试模型抗“局部密度陷阱(Density Mode)”和“欧氏真空(Euclidean Void)”的能力。
+    Generate a Bimodal Crescent manifold with a sparse bridge.
+    Characteristics: Extremely high density at both ends, and an extremely sparse connection in the middle.
+    Used to test the model's ability to resist "Density Mode" traps and "Euclidean Voids".
     """
     # np.random.seed(42)
-    # 高密度集群 1 (右端)
+    # High-density cluster 1 (right end)
     theta1 = np.random.normal(0, 0.2, 400)
-    # 高密度集群 2 (左端)
+    # High-density cluster 2 (left end)
     theta2 = np.random.normal(np.pi, 0.2, 400)
-    # 极度稀疏的中间连接桥梁 (中间部分)
+    # Extremely sparse middle connecting bridge (middle part)
     theta3 = np.random.uniform(0, np.pi, 50)
 
     theta = np.concatenate([theta1, theta2, theta3])
@@ -60,8 +60,8 @@ def generate_bimodal_crescent():
 
 def generate_dynamic_functional_data(N=1000, D=50, random_state=42):
     """
-    生成带自变量 T 的动态泛函数据 (Dynamic Functional Data)
-    真实波峰随时间 T 作正弦漂移，但存在固定在 X=3.0 的高密度离群陷阱。
+    Generate Dynamic Functional Data with independent variable T.
+    The true peak drifts sinusoidally with time T, but there is a high-density outlier trap fixed at X=3.0.
     """
     np.random.seed(random_state)
     T = np.random.uniform(0, 10, N)
@@ -70,15 +70,15 @@ def generate_dynamic_functional_data(N=1000, D=50, random_state=42):
 
     for i in range(N):
         t = T[i]
-        # 【真实波峰动态轨迹】：随时间 T 正弦摆动
+        #[Dynamic trajectory of the true peak]: Oscillates sinusoidally with time T
         true_center = 2.0 * np.sin(t * np.pi / 5.0)
 
         rand_val = np.random.rand()
         if rand_val < 0.85:
-            # 85% 真实数据，锚定在 true_center，方差较大 (较散)
+            # 85% true data, anchored at true_center, with a larger variance (more scattered)
             shift = np.random.normal(true_center, 0.8)
         else:
-            # 15% 离群陷阱，死死固定在右侧 3.0，方差极小 (极密)
+            # 15% outlier trap, firmly fixed at 3.0 on the right, with an extremely small variance (extremely dense)
             shift = np.random.normal(3.0, 0.1)
 
         amp = np.random.normal(2.0, 0.2)
@@ -87,7 +87,7 @@ def generate_dynamic_functional_data(N=1000, D=50, random_state=42):
 
         Y[i] = base_curve + noise
 
-    # 生成用于评估的绝对纯净 Ground Truth 表面
+    # Generate an absolutely pure Ground Truth surface for evaluation
     t_eval = np.linspace(0, 10, 50)
     GT_surface = np.zeros((len(t_eval), D))
     for i, t in enumerate(t_eval):
@@ -99,53 +99,53 @@ def generate_dynamic_functional_data(N=1000, D=50, random_state=42):
 
 def generate_spd_data_with_labels(N=300, dim=2, random_state=42):
     """
-    生成任意维度的 SPD 矩阵数据，并返回严格的经验流形中心。
+    Generate SPD matrix data of arbitrary dimensions, and return the strict empirical manifold center.
     """
     np.random.seed(random_state)
     Y = np.zeros((N, dim * dim))
     labels = np.zeros(N)
 
-    # 1. 构建绝对的真实基准旋转矩阵 R_true
+    # 1. Construct the absolute true baseline rotation matrix R_true
     np.random.seed(0)
     R_true = ortho_group.rvs(dim) if dim > 2 else np.array(
-        [[np.cos(np.pi / 4), -np.sin(np.pi / 4)], [np.sin(np.pi / 4), np.cos(np.pi / 4)]])
+        [[np.cos(np.pi / 4), -np.sin(np.pi / 4)],[np.sin(np.pi / 4), np.cos(np.pi / 4)]])
     np.random.seed(random_state)
 
     for i in range(N):
         is_outlier = np.random.rand() < 0.20
         labels[i] = 1 if is_outlier else 0
 
-        # 初始化特征值向量
+        # Initialize the eigenvalue vector
         l_vals = np.zeros(dim)
 
         if is_outlier:
-            # 【膨胀噪声】：主特征值极大，其余也大
+            # [Inflation noise]: The principal eigenvalue is extremely large, and the rest are also large
             l_vals[-1] = np.random.normal(12.0, 1.0)
             for j in range(dim - 1):
                 l_vals[j] = np.random.normal(2.0, 0.5)
 
-            # 李代数扰动
+            # Lie algebra perturbation
             A = np.random.normal(0, 0.1, (dim, dim))
-            S = A - A.T  # 斜对称矩阵
+            S = A - A.T  # Skew-symmetric matrix
             R = slinalg.expm(S)
         else:
-            # 【核心正常值】：主特征值 3.0，其余较小 0.4
+            # [Core normal values]: The principal eigenvalue is 3.0, and the rest are smaller at 0.4
             l_vals[-1] = np.random.lognormal(mean=np.log(3.0), sigma=0.4)
             for j in range(dim - 1):
                 l_vals[j] = np.random.lognormal(mean=np.log(0.4), sigma=0.2)
 
-            # 李代数扰动：在 R_true 附近进行微小扰动
+            # Lie algebra perturbation: Apply a minor perturbation around R_true
             A = np.random.normal(0, 0.3, (dim, dim))
             S = A - A.T
             R = R_true @ slinalg.expm(S)
 
-        # 组合特征分解: M = R * Lambda * R^T
+        # Combined eigendecomposition: M = R * Lambda * R^T
         M = R @ np.diag(l_vals) @ R.T
         Y[i] = M.flatten()
 
     # =========================================================
-    # 🌟 核心修复：计算纯净样本 (labels==0) 的经验 Log-Euclidean Mean
-    # 这代表了这批数据在去除了所有异常值后，最绝对、最真实的几何重心
+    # Calculate the empirical Log-Euclidean Mean of clean samples (labels==0)
+    # This represents the most absolute and true geometric center of gravity of this batch of data after removing all outliers
     # =========================================================
     clean_matrices = Y[labels == 0].reshape(-1, dim, dim)
     log_sum = np.zeros((dim, dim))
@@ -153,7 +153,7 @@ def generate_spd_data_with_labels(N=300, dim=2, random_state=42):
         log_sum += slinalg.logm(M).real
 
     log_mean = log_sum / len(clean_matrices)
-    SPD_true = slinalg.expm(log_mean).real  # 映射回 SPD 流形
+    SPD_true = slinalg.expm(log_mean).real  # Map back to the SPD manifold
 
-    # 将 SPD_true 作为 Ground Truth 返回 (替代原来错误的 R_true)
+    # Return SPD_true as the Ground Truth (replacing the originally incorrect R_true)
     return Y, labels, SPD_true
