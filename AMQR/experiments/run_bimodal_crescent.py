@@ -8,75 +8,85 @@ from scipy.stats import rankdata
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(PROJECT_ROOT)
 
-# 导入拆分好的模块
 from data.simulations import generate_bimodal_crescent
 from models.amqr_engine import AMQR_Engine
-from models.baselines import get_frechet_tube, get_kde_tube
-from utils.visualization import plot_bimodal_crescent_1x4
-from utils.tuning import auto_tune_amqr
+
+# 🌟 修复：直接导入静态流形的底层核心算法 (Core Estimators)
+from models.baselines import _frechet_l2_mean_core, _geodesic_l1_median_core, _kde_mode_core
+
+# 假设你的可视化工具箱支持动态接收列表画图
+try:
+    from utils.visualization import plot_bimodal_crescent_1x5
+except ImportError:
+    # 如果还没有 1x5 函数，建议你在 utils 里把原来的 1x4 改成动态长度支持，或者直接 rename
+    print("⚠️ 提示: 请确保 visualization.py 中存在支持 5 个子图的 plot 函数。")
 
 if __name__ == "__main__":
     print("========================================================")
-    print(" 🌟 Running Sub-Experiment: Bimodal Crescent")
+    print(" 🌟 Running Sub-Experiment: Dumbbell / Bimodal Crescent")
     print("========================================================")
 
-    AUTO_TUNE = False
-    NUM_FOLDS = 3
-
-    # 1. 生成数据
-    print("⏳ Generating bimodal crescent data...")
-    Y = generate_bimodal_crescent()
+    # 1. 生成数据 (哑铃状：两端密集，中间桥梁稀疏)
+    print("⏳ Generating bimodal crescent/dumbbell data...")
+    Y = generate_bimodal_crescent(N=2000, bridge_ratio=0.5, thickness=0.5)
 
     # 2. 运行模型
-    print("⏳ Running models...")
+    print("⏳ Running all baseline models...")
 
-    # A. NW Mean (全局欧氏均值)
+    # ---------------------------------------------------------
+    # A. Ambient Euclidean Mean (欧氏均值 - 基线 1)
+    # ---------------------------------------------------------
     nw_med = np.mean(Y, axis=0)
     nw_ranks = rankdata(np.linalg.norm(Y - nw_med, axis=1)) / len(Y)
 
-    # B. Fréchet L1 Median
-    f_med, f_ranks = get_frechet_tube(Y)
+    # ---------------------------------------------------------
+    # B. Intrinsic Fréchet L2 Mean (测地线 L2 均值 - 基线 2)
+    # ---------------------------------------------------------
+    print(">> Running Fréchet L2 Mean...")
+    fl2_med, fl2_depths = _frechet_l2_mean_core(Y, k_neighbors=10)
+    fl2_ranks = rankdata(fl2_depths) / len(Y)
 
-    # C. SW-KDE (局部密度最高点)
-    kde_med, kde_ranks = get_kde_tube(Y)
+    # ---------------------------------------------------------
+    # C. Intrinsic Fréchet L1 Median (测地线 L1 中位数 - 基线 3)
+    # ---------------------------------------------------------
+    print(">> Running Fréchet L1 Median...")
+    fl1_med, fl1_depths = _geodesic_l1_median_core(Y, k_neighbors=10)
+    fl1_ranks = rankdata(fl1_depths) / len(Y)
 
-    # D. AMQR (Proposed)
-    # 1. 根据数据的物理属性，定死“结构与先验参数”
+    # ---------------------------------------------------------
+    # D. KDE Mode (核密度寻模 - 基线 4)
+    # ---------------------------------------------------------
+    print(">> Running KDE Density Mode...")
+    kde_med, kde_depths = _kde_mode_core(Y)
+    kde_ranks = rankdata(kde_depths) / len(Y)
+
+    # ---------------------------------------------------------
+    # E. AMQR (Proposed Method)
+    # ---------------------------------------------------------
     fixed_setup = {
         'ref_dist': 'uniform',  # 明确边界，无长尾
-        'use_knn': True,  # 存在物理真空
-        'd_int': None,
-        'max_samples': 500
+        'use_knn': True,  # Pathway B: 依赖图逼近不跨越真空
+        'd_int': 2,  # 强制 2D 隐空间，完美适配 2D 哑铃
+        'max_samples': 500,
+        'epsilon': 0.0  # 🚨 理论铁律：Exact GW 零模糊，防止概率泄漏
     }
 
-    # 2. 定义你需要机器自动搜索的“超参数网格”
-    param_grid = {
-        'epsilon': [0.0, 0.01, 0.03, 0.05],
-        'k_neighbors': [5, 10, 15]
-    }
-
-    if AUTO_TUNE:
-        print(">> 启动 OOS-GW 交叉验证自动调参...")
-        param_grid = {'epsilon': [0.0, 0.01, 0.03, 0.05], 'k_neighbors': [5, 10, 15]}
-        best_hyperparams = auto_tune_amqr(Y, param_grid, fixed_kwargs=fixed_setup, cv=NUM_FOLDS)
-    else:
-        print(">> 极速模式: 使用预设的最佳参数 (from Paper Table X)")
-        best_hyperparams = {'epsilon': 0.05, 'k_neighbors': 5}  # 填入你跑出来的最优值
-
-    # 4. 把机器选出来的最佳参数合并进去，进行最终的拟合与画图！
+    print(">> Running Proposed AMQR...")
+    best_hyperparams = {'k_neighbors': 25}  # 保持与 Fréchet 一致的图分辨率，以示公平
     final_params = {**fixed_setup, **best_hyperparams}
-    print(f"🚀 使用最终参数进行全量拟合: {final_params}")
 
-    # 调用引擎：强制 d_int=1, 自动进行大样本降维与补全
     amqr = AMQR_Engine(**final_params)
     a_med, a_ranks = amqr.fit_predict(Y)
 
-    # 3. 组织数据并画图
-    meds = [nw_med, f_med, kde_med, a_med]
-    ranks = [nw_ranks, f_ranks, kde_ranks, a_ranks]
+    # 3. 组织数据并调用绘图
+    meds = [nw_med, fl2_med, fl1_med, kde_med, a_med]
+    ranks = [nw_ranks, fl2_ranks, fl1_ranks, kde_ranks, a_ranks]
+    method_names = ["Euclidean Mean", "Fréchet L2 Mean", "Fréchet L1 Median", "KDE Mode", "Proposed AMQR"]
 
     print("🎨 Rendering plots...")
-    save_path = os.path.join(PROJECT_ROOT, "results", "figures", "Fig_Bimodal_Crescent.jpg")
-    plot_bimodal_crescent_1x4(Y, meds, ranks, save_path=save_path)
+    save_path = os.path.join(PROJECT_ROOT, "results", "figures", "Fig_Dumbbell_Comparison.pdf")
 
-    print("🎉 双峰月牙小品实验圆满完成！")
+    # 这里需要确保你的 plot 函数能处理 5 个输入。
+    plot_bimodal_crescent_1x5(Y, meds, ranks, save_path=save_path)
+
+    print(f"🎉 哑铃形状小品实验圆满完成！(请在本地查看 {save_path})")
