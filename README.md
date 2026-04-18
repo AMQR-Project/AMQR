@@ -5,7 +5,6 @@
 
 This repository contains the official Python implementation of the paper:
 > **"Distance-Driven Conditional Quantiles on Manifolds via Gromov-Wasserstein Alignment"**  
-> *Zhaoya Zhou and Maozai Tian*
 
 ## 📖 Overview
 
