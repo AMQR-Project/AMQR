@@ -1,152 +1,116 @@
-# experiments/run_sim3_spd.py
+# experiments/run_sim3_spd.py (完整修正版)
+
 import sys
 import os
 import numpy as np
-from tqdm import tqdm
+import scipy.linalg
+from scipy.spatial.distance import pdist, squareform
 from scipy.stats import rankdata
 
+# --- 项目路径设置 ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(PROJECT_ROOT)
 
+# --- 核心模块导入 ---
 from data.simulations import generate_spd_data_with_labels
 from models.amqr_engine import AMQR_Engine
-from models.baselines import get_frechet_tube, get_kde_tube
-from utils.metrics import evaluate_spd_metrics
-from utils.visualization import plot_spd_3x4_comparison
+from utils.visualization import plot_spd_3x5_comparison
+
+# --- 导入所有基线，包括新增的黎曼方法 ---
+from models.baselines import (
+    get_nw_tube,
+    get_riemannian_l2_tube,  # 🌟 新增：真正的黎曼 L2 均值
+    get_isotropic_geodesic_tube,  # 保持 L1 Medoid 作为鲁棒性对比
+    get_kde_mode_tube
+)
 
 
-def extract_spd_sliding_windows(T, Y_spd, t_eval, amqr_params, window_size=1.5):
-    """提取动态 SPD 回归轨迹"""
-    centers = {k: [] for k in ['nw', 'f', 'kde', 'a']}
-    # 记录全局的 ranks (初始化为 1.0 最边缘)
-    ranks_dict = {k: np.ones(len(T)) for k in ['nw', 'f', 'kde', 'a']}
+def compute_lem_distance_matrix(Y_matrices):
+    """计算 SPD 矩阵的精确 Log-Euclidean 黎曼距离矩阵"""
+    if Y_matrices.ndim == 2:
+        N, flat_dim = Y_matrices.shape
+        dim_mat = int(np.sqrt(flat_dim))
+        Y_matrices_3d = Y_matrices.reshape(N, dim_mat, dim_mat)
+    else:
+        N, dim_mat, _ = Y_matrices.shape
+        Y_matrices_3d = Y_matrices
 
-    print("⏳ [1/2] 运行基线 SPD 流形回归 (Sliding Windows)...")
-    for t_c in tqdm(t_eval, desc="Baselines"):
-        idx = np.where(np.abs(T - t_c) <= window_size / 2.0)[0]
-        if len(idx) < 5:
-            # 兜底：如果没有数据点，返回单位阵
-            dummy_med = np.eye(Y_spd.shape[1])
-            centers['nw'].append(dummy_med);
-            centers['f'].append(dummy_med);
-            centers['kde'].append(dummy_med)
-            continue
+    print(f"⏳ 正在将 {N} 个 {dim_mat}x{dim_mat} SPD 矩阵映射到黎曼切空间 (Log-space)...")
+    log_Y_flat = np.array([scipy.linalg.logm(M + np.eye(dim_mat) * 1e-6).real.flatten() for M in Y_matrices_3d])
 
-        Y_c = Y_spd[idx]
-
-        # 1. NW Mean (Euclidean) - 会引发更严重的高维膨胀效应
-        nw_med = np.mean(Y_c, axis=0)
-        centers['nw'].append(nw_med)
-
-        # 2. Frechet (L1 Median)
-        f_med, f_ranks_c = get_frechet_tube(Y_c)
-        centers['f'].append(f_med)
-
-        # 3. SW-KDE (Mode)
-        kde_med, kde_ranks_c = get_kde_tube(Y_c)
-        centers['kde'].append(kde_med)
-
-        # 提取中心切片的 ranks 到全局
-        inner_condition = (T[idx] >= t_c - 0.2) & (T[idx] < t_c + 0.2)
-        inner_idx = idx[np.where(inner_condition)[0]]
-        if len(inner_idx) > 0:
-            # 简化局部 ranks 拼接，主要用于可视化对比
-            ranks_dict['nw'][inner_idx] = (
-                        rankdata(np.linalg.norm(Y_spd[inner_idx] - nw_med, axis=1)) / len(inner_idx))
-            ranks_dict['f'][inner_idx] = f_ranks_c[:len(inner_idx)]
-            ranks_dict['kde'][inner_idx] = kde_ranks_c[:len(inner_idx)]
-
-    print("\n⏳ [2/2] 运行 AMQR 时空流形回归 (Exact OT without OOS)...")
-
-    amqr = AMQR_Engine(**amqr_params)
-
-    # 🌟 传入时间轴 T 进行联合回归
-    traj_a, global_ranks_a = amqr.fit_predict(Y_spd, T=T, t_eval=t_eval, window_size=window_size)
-
-    centers['a'] = [med for _, med in traj_a]
-    ranks_dict['a'] = global_ranks_a
-
-    return centers, ranks_dict
+    lem_dist_matrix = squareform(pdist(log_Y_flat, metric='euclidean'))
+    return lem_dist_matrix
 
 
 if __name__ == "__main__":
     print("========================================================")
-    print(" 🌟 Sim 3: Dynamic SPD Matrix Regression (Time-Varying)")
+    print(" 🌟 Sim 3: Dynamic SPD Regression (5-Method Ultimate Showdown)")
     print("========================================================")
 
-    # ========================================================
-    # 🎛️ 审稿人复现开关 (Reproducibility Switch)
-    # ========================================================
-    AUTO_TUNE = False
     DIM = 3
-    NUM_FOLDS = 3
-    # ========================================================
+    # 生成数据，注意 R_true 现在是 SPD_true
+    Y_spd, true_labels, SPD_true = generate_spd_data_with_labels(N=400, dim=DIM, random_state=42)
 
-    print(f"⏳ 1. Generating {DIM}x{DIM} SPD Data with Outliers...")
-    Y_spd, true_labels, R_true = generate_spd_data_with_labels(N=400, dim=DIM)
+    # --- 预计算精确的黎曼度量 ---
+    lem_dist_matrix = compute_lem_distance_matrix(Y_spd)
 
-    # 🌟 模拟一个时间协变量 T，让无序的矩阵产生时间维度的演化
+    # --- AMQR 模型参数配置 ---
+    amqr_params = {
+        'ref_dist': 'uniform',
+        'use_log_squash': False,
+        'use_knn': False,  # 因为我们直接提供距离矩阵
+        'd_int': int(DIM * (DIM + 1) / 2),
+        'epsilon': 0.0,
+        'max_samples': 2000
+    }
+
+    # --- 统一执行所有模型 ---
+    # 在这个静态场景中，我们只评估一个时间点 t=5.0 的截面
     T = np.linspace(0, 10, len(Y_spd))
-    t_eval = np.linspace(T.min(), T.max(), 20)
+    target_t = 5.0
+    window_size = 10.0  # 使用一个大窗口覆盖所有数据
 
-    # 2. 物理与拓扑先验
-    fixed_setup = {
-        'ref_dist': 'uniform',  # SPD 常伴有极端长尾，用 Gaussian 先验镇压
-        'use_log_squash': True,  # 🌟 黎曼对数压缩：防御非紧致流形体积膨胀的绝对核心！
-        'use_knn': True,  # 逼近黎曼测地线
-        'd_int': None,  # MLE 自动探测维数
-        'max_samples': 2000  # 保持纯净 OT，防 OOS 失真
-    }
+    # 1. AMQR (Proposed)
+    print("\n[1/5] Running AMQR...")
+    amqr = AMQR_Engine(**amqr_params)
+    a_med, a_ranks = amqr.fit_predict(Y_spd, y_dist_m=lem_dist_matrix)
 
-    # 3. 调参分流逻辑
-    if AUTO_TUNE:
-        print("\n>> 启动 SPD 时空回归 OOS-GW 交叉验证...")
-        from utils.tuning import auto_tune_amqr
+    # 2. NW Mean (Baseline)
+    print("\n[2/5] Running NW Mean...")
+    nw_traj, _ = get_nw_tube(T, Y_spd, t_eval=[target_t], window_size=window_size)
+    nw_med = nw_traj[0][1]
+    nw_ranks = rankdata(np.linalg.norm(Y_spd - nw_med.flatten(), axis=1)) / len(Y_spd)
 
-        # ⚠️ 必须展平为 2D 才能喂给 scikit-learn 和 cdist
-        Y_spd_flat = Y_spd.reshape(len(Y_spd), -1)
+    # 3. Riemannian L2 Mean (Baseline)
+    print("\n[3/5] Running Riemannian L2 Mean...")
+    f_l2_traj, f_l2_ranks_full = get_riemannian_l2_tube(T, Y_spd, t_eval=[target_t], window_size=window_size)
+    f_l2_med = f_l2_traj[0][1]
 
-        param_grid = {
-            'epsilon': [0.0, 0.01, 0.03, 0.05],
-            'k_neighbors': [5, 10, 15]
-        }
-        best_hyperparams = auto_tune_amqr(
-            Y_spd_flat, param_grid, fixed_kwargs=fixed_setup, cv=NUM_FOLDS,
-            T=T, t_eval=t_eval, window_size=1.5
-        )
-    else:
-        print("\n>> 极速模式: 使用物理先验最佳参数...")
-        best_hyperparams = {'epsilon': 0.0, 'k_neighbors': 5}
+    # 4. Geodesic L1 Medoid (Baseline)
+    print("\n[4/5] Running Geodesic L1 Medoid...")
+    f_l1_traj, f_l1_ranks_full = get_isotropic_geodesic_tube(T, Y_spd, t_eval=[target_t], window_size=window_size,
+                                                             y_dist_m=lem_dist_matrix)
+    f_l1_med = f_l1_traj[0][1]
 
-    final_amqr_params = {**fixed_setup, **best_hyperparams}
-    print(f"\n🚀 使用最终参数进行全量拟合: {final_amqr_params}")
+    # 5. KDE Mode (Baseline)
+    print("\n[5/5] Running KDE Mode...")
+    kde_traj, kde_ranks_full = get_kde_mode_tube(T, Y_spd, t_eval=[target_t], window_size=window_size)
+    kde_med = kde_traj[0][1]
 
-    # 4. 运行模型提取完整时间轨迹
-    centers_dict, ranks_dict = extract_spd_sliding_windows(
-        T, Y_spd, t_eval, amqr_params=final_amqr_params, window_size=1.5
-    )
-
-    # 5. 为了兼容你现有的评估和可视化代码 (要求单一中心点)，我们提取 t=5.0 截面的结果
-    print("\n⏳ 正在将动态轨迹截面适配到静态评估接口...")
-    mid_idx = len(t_eval) // 2  # 提取最中间的时刻
+    # --- 组织结果用于绘图 ---
     results_static = {
-        'nw': {'med': centers_dict['nw'][mid_idx], 'ranks': ranks_dict['nw']},
-        'frechet': {'med': centers_dict['f'][mid_idx], 'ranks': ranks_dict['f']},
-        'kde': {'med': centers_dict['kde'][mid_idx], 'ranks': ranks_dict['kde']},
-        'amqr': {'med': centers_dict['a'][mid_idx], 'ranks': ranks_dict['a']}
+        'nw': {'med': nw_med, 'ranks': nw_ranks},
+        'f_l2': {'med': f_l2_med, 'ranks': f_l2_ranks_full},
+        'f_l1': {'med': f_l1_med, 'ranks': f_l1_ranks_full},
+        'kde': {'med': kde_med, 'ranks': kde_ranks_full},
+        'amqr': {'med': a_med, 'ranks': a_ranks}
     }
 
-    # 6. 定量评估
-    print("\n=======================================================")
-    print(f"📊 Quantitative Evaluation on {DIM}x{DIM} SPD Regression (Cross-Section)")
-    print("=======================================================")
-    df_metrics = evaluate_spd_metrics(results_static, true_labels, dim=DIM, R_true=R_true)
-    print(df_metrics.to_string())
-    print("=======================================================\n")
+    # --- 渲染最终对比图 ---
+    print("\n🎨 Rendering the 3x5 Ultimate Comparison Plot...")
+    save_img_path = os.path.join(PROJECT_ROOT, "results", "figures", f"Fig5_SPD_{DIM}D_Comparison_3x5.pdf")
 
-    # 7. 可视化
-    print("🎨 Rendering the 3x4 Comparison Plot...")
-    save_img_path = os.path.join(PROJECT_ROOT, "results", "figures", f"Fig5_SPD_{DIM}D_Regression.jpg")
-    plot_spd_3x4_comparison(Y_spd, results_static, R_true=R_true, dim=DIM, filename=save_img_path)
+    # 🌟 核心修复：移除了不再被接受的 R_true 参数
+    plot_spd_3x5_comparison(Y_spd, results_static, dim=DIM, filename=save_img_path)
 
-    print(f"🎉 {DIM}x{DIM} 维动态 SPD 矩阵回归实验圆满完成！")
+    print(f"\n🎉 {DIM}x{DIM} 维 SPD 矩阵实验圆满完成！")
