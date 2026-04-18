@@ -86,8 +86,11 @@ if __name__ == "__main__":
     dtw_ranks = rankdata(dtw_matrix[dtw_medoid_idx]) / N
 
     # 3. 计算 AMQR 方法
-    print("⏳ 执行 AMQR 高维流形拓扑对齐...")
-    amqr = AMQR_Engine(ref_dist='uniform', use_knn=True, k_neighbors=5, d_int=None, epsilon=0.01)
+    print("⏳ 执行 AMQR 高维流形拓扑对齐 (Exact GW without Entropic Blurring)...")
+    amqr = AMQR_Engine(ref_dist='uniform', use_knn=True, k_neighbors=5, d_int=None, epsilon=0.0)
+
+    # 🌟 统一论调：在 \epsilon=0 时，AMQR 并非在造假合成，而是在做内蕴拓扑检索 (Intrinsic Retrieval)
+    # 它在观测样本中提取了受局部相位噪声影响最小的“拓扑滤波器 (Topological Filter)”原型
     amqr_median, amqr_ranks = amqr.fit_predict(Y_curves, T=None)
 
     # 4. 创建上下双面板图表
@@ -105,11 +108,11 @@ if __name__ == "__main__":
     cbar1 = fig.colorbar(sm1, ax=axes[0], pad=0.01)
     cbar1.set_label('DTW Distance Rank ($u_{DTW}$)', rotation=270, labelpad=15, fontweight='bold')
 
-    # 绘制 Panel B (AMQR)
+    # 绘制 Panel B (AMQR) - 🚨 标签全部更新！
     cmap2, norm2 = plot_single_panel(
         axes[1], X_grid, Y_curves, amqr_ranks, amqr_median, nw_mean,
-        title="(B) Proposed: ECG Template Extraction via AMQR Topological Depth",
-        center_label="AMQR Topological Median (Barycentric Projection)",
+        title="(B) Proposed: ECG Prototype Discovery via AMQR Topological Filter", # 🌟 改成了 Prototype Discovery
+        center_label="AMQR Topological Median (Intrinsic Retrieval)",              # 🌟 改成了 Intrinsic Retrieval
         rank_label="AMQR Topological Quantile Rank ($u$)"
     )
     sm2 = plt.cm.ScalarMappable(cmap=cmap2, norm=norm2)
@@ -119,7 +122,7 @@ if __name__ == "__main__":
 
     plt.tight_layout()
     os.makedirs(os.path.join(PROJECT_ROOT, "results", "figures"), exist_ok=True)
-    save_path = os.path.join(PROJECT_ROOT, "results", "figures", "Fig8_Dual_Comparison.jpg")
+    save_path = os.path.join(PROJECT_ROOT, "results", "figures", "Fig8_Dual_Comparison.pdf")
     plt.savefig(save_path, dpi=100)
     plt.show()
     print(f"🎉 双面板图表已生成: {save_path}")
