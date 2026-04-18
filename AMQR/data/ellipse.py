@@ -3,8 +3,8 @@ import numpy as np
 
 def generate_straight_ellipse(N=1000, random_state=42):
     """
-    生成二维线性强各向异性点云 (雪茄形直椭圆)
-    用于测试基线模型在极度拉伸的协方差下的表现。
+    Generate a 2D linear, highly anisotropic point cloud (a cigar-shaped straight ellipse). 
+    Used to test the baseline model's performance under extremely stretched covariance.
     """
     np.random.seed(random_state)
     mean_Y = [0, 0]
@@ -15,8 +15,8 @@ def generate_straight_ellipse(N=1000, random_state=42):
 
 def generate_bent_ellipse(N=1000, random_state=42):
     """
-    生成二维非线性弯曲流形点云 (弯月形椭圆)
-    用于测试模型对非线性流形骨架的捕捉能力。
+    Generate a 2D non-linear curved manifold point cloud (crescent-shaped ellipse).
+    Used to test the model's ability to capture the non-linear manifold skeleton.
     """
     np.random.seed(random_state)
     mean_Y = [0, 0]
