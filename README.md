@@ -142,20 +142,5 @@ To use **Pathway A (Analytical Metric)**, simply precompute your exact distance 
 median, ranks = amqr.fit_predict(Y, y_dist_m=exact_distance_matrix)
 ```
 
----
-
-## 📝 Citation
-
-If you find this code or our theoretical framework useful in your research, please consider citing our paper:
-
-```bibtex
-@article{zhou2026distance,
-  title={Distance-Driven Conditional Quantiles on Manifolds via Gromov-Wasserstein Alignment},
-  author={Zhou, Zhaoya and Tian, Maozai},
-  journal={Submitted to the Annals of Statistics},
-  year={2026}
-}
-```
-
 ## 📄 License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
