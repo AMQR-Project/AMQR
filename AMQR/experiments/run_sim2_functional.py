@@ -7,52 +7,77 @@ from tqdm import tqdm
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(PROJECT_ROOT)
 
-from data.simulations import generate_dynamic_functional_data
+from data.simulations import generate_drifting_bimodal_functional_data, generate_dynamic_functional_data
 from models.amqr_engine import AMQR_Engine
-from models.baselines import get_frechet_tube, get_kde_tube
-from utils.metrics import evaluate_dynamic_functional_metrics
-from utils.visualization import plot_dynamic_functional_2x4
+
+# 🌟 引入顶刊流形基线全家桶
+from models.baselines import (
+    get_nw_tube,
+    get_frechet_regression_tube,
+    get_isotropic_geodesic_tube,
+    get_kde_mode_tube
+)
+
+from utils.visualization import plot_dynamic_functional_2x5, plot_functional_depth_coloring
 
 
-# 🌟 1. 修改提取函数：用 AMQR "探路"，确保所有基线模型的时间轴绝对对齐
+# experiments/run_sim2_functional.py
+
 def extract_functional_sliding_windows(T, Y_curves, t_eval, amqr_params, window_size=1.5):
-    centers = {k: [] for k in ['nw', 'f', 'kde', 'a']}
+    """
+    在统一的时间网格 t_eval 上，独立运行 AMQR 及所有基线模型。
 
-    # 1. 优先运行 AMQR 引擎 (它会自适应跳过拓扑饥饿的危险边缘截面)
-    print("\n⏳ 运行 AMQR 时空泛函回归 (Exact OT without OOS distortion)...")
+    此函数确保了所有模型都在完全相同的条件下进行评估，
+    遵循了严谨的并行比较实验设计，消除了方法间的依赖性。
+    """
+    centers = {}
+    # 提取 k_neighbors 以确保 Fréchet 基线与 AMQR 使用相同的图分辨率
+    k_neighbors = amqr_params.get('k_neighbors', 5)
+
+    # --- 对称化并行执行流程 ---
+    # 所有模型现在都直接在统一的 t_eval 网格上进行滑动窗口回归。
+
+    # 1. AMQR (Proposed Method)
+    print("\n⏳ [1/5] Running AMQR (Proposed)...")
     amqr = AMQR_Engine(**amqr_params)
     traj_a, _ = amqr.fit_predict(Y_curves, T=T, t_eval=t_eval, window_size=window_size)
-
-    # 🌟 提取出 AMQR 认为安全的、成功算出来的实际时间轴 t_traj
-    t_traj = np.array([t for t, _ in traj_a])
     centers['a'] = [med for _, med in traj_a]
 
-    # 2. 用这个绝对安全的 t_traj 来运行基线模型！保证四个模型长度 100% 一致！
-    print(f"\n⏳ 运行基线泛函回归 (共 {len(t_traj)} 个安全截面)...")
-    for t_c in tqdm(t_traj, desc="Baselines"):
-        idx = np.where(np.abs(T - t_c) <= window_size / 2.0)[0]
-        Y_c = Y_curves[idx]
+    # 2. Nadaraya-Watson Mean (Baseline)
+    print("⏳ [2/5] Running NW Mean (Ambient L2)...")
+    nw_traj, _ = get_nw_tube(T, Y_curves, t_eval, window_size=window_size)
+    centers['nw'] = [med for _, med in nw_traj]
 
-        centers['nw'].append(np.mean(Y_c, axis=0))
-        f_med, _ = get_frechet_tube(Y_c)
-        centers['f'].append(f_med)
-        kde_med, _ = get_kde_tube(Y_c)
-        centers['kde'].append(kde_med)
+    # 3. Fréchet L2 Mean Regression (Baseline)
+    print("⏳ [3/5] Running Fréchet Regression (Geodesic L2)...")
+    f_l2_traj, _ = get_frechet_regression_tube(T, Y_curves, t_eval, window_size=window_size, k_neighbors=k_neighbors)
+    centers['f_l2'] = [med for _, med in f_l2_traj]
+
+    # 4. Fréchet L1 Median Regression (Baseline)
+    print("⏳ [4/5] Running Isotropic Geodesic (Geodesic L1)...")
+    f_l1_traj, _ = get_isotropic_geodesic_tube(T, Y_curves, t_eval, window_size=window_size, k_neighbors=k_neighbors)
+    centers['f_l1'] = [med for _, med in f_l1_traj]
+
+    # 5. Sliding-Window KDE (Baseline)
+    print("⏳ [5/5] Running SW-KDE (Density Mode)...")
+    kde_traj, _ = get_kde_mode_tube(T, Y_curves, t_eval, window_size=window_size)
+    centers['kde'] = [med for _, med in kde_traj]
+
+    # 从任一模型的输出中提取最终的时间轴。
+    # 由于所有模型都在 t_eval 上运行，它们的输出时间戳理论上应该是一致的
+    # （除非某个窗口数据过少被跳过）。
+    t_traj = np.array([t for t, _ in traj_a])
 
     return t_traj, centers
 
 
 if __name__ == "__main__":
     print("========================================================")
-    print(" 🌟 Sim 2: Dynamic Functional Regression (50D)")
+    print(" 🌟 Sim 2: Dynamic Functional Regression (50D, 5 Models)")
     print("========================================================")
 
-    # ========================================================
-    # 🎛️ 审稿人复现开关 (Reproducibility Switch)
-    # ========================================================
-    AUTO_TUNE = True  # 设为 True 看看机器的几何直觉！
+    AUTO_TUNE = True
     NUM_FOLDS = 3
-    # ========================================================
 
     # 1. 生成数据
     T, X_grid, Y_curves, t_eval, GT_surface = generate_dynamic_functional_data(N=1500, D=50)
@@ -60,62 +85,124 @@ if __name__ == "__main__":
     # 2. 固定结构先验
     fixed_setup = {
         'ref_dist': 'uniform',
-        'd_int': None,  # 曲线随时间演化，流形核心骨架为 1D 轨迹
-        'max_samples': 2000  # 🌟 阀门全开，禁止局部窗口发生欧氏 OOS 短路拉扯
+        'd_int': 2,
+        'max_samples': 2000,
+        'epsilon': 0.0,
+        'use_knn': True
     }
 
-    # 3. 调参分流逻辑
+    # 3. 调参分流
     if AUTO_TUNE:
         print("\n>> 启动泛函回归 OOS-GW 交叉验证...")
         from utils.tuning import auto_tune_amqr
 
-        param_grid = {
-            'epsilon': [0.0, 0.01, 0.03, 0.05],
-            'k_neighbors': [5, 10, 15],
-            'use_knn': [True, False]
-        }
+        param_grid = {'k_neighbors': [3, 5, 8, 12]}
         best_hyperparams = auto_tune_amqr(
             Y_curves, param_grid, fixed_kwargs=fixed_setup, cv=NUM_FOLDS,
             T=T, t_eval=t_eval, window_size=1.5
         )
     else:
-        print("\n>> 极速模式: 使用论文汇报的最佳参数...")
-        best_hyperparams = {'epsilon': 0.01, 'use_knn': True, 'k_neighbors': 5}
+        best_hyperparams = {'k_neighbors': 5}
 
     final_amqr_params = {**fixed_setup, **best_hyperparams}
     print(f"\n🚀 使用最终参数进行全量拟合: {final_amqr_params}")
 
-    # 4. 运行模型 (🚨 千万要把 window_size 改回宽窗口 1.5 甚至 2.0！)
+    # 4. 运行模型
     t_traj, centers_dict = extract_functional_sliding_windows(
         T, Y_curves, t_eval, amqr_params=final_amqr_params, window_size=1.5
     )
 
-    # 5. 定量评估
-    print("\n=======================================================")
-    print("📊 Quantitative Evaluation on Functional Data")
-    print("=======================================================")
-    # 🌟 调用上一轮刚写好的带对齐功能的评估函数
-    df_metrics = evaluate_dynamic_functional_metrics(
-        t_traj=t_traj,
-        X_grid=X_grid,
-        GT_surface=GT_surface,
-        centers_dict=centers_dict,
-        global_t=t_eval
-    )
-    print(df_metrics.to_string())
+    # 5. 可视化 (彻底删除定量误差表格计算，直接出图！)
+    print("\n🎨 渲染 2x5 泛函时空热力与截面对比图...")
+    save_img_path = os.path.join(PROJECT_ROOT, "results", "figures", "Fig3_Functional_Dynamic_5Models.pdf")
 
-    # 自动保存表格
-    os.makedirs(os.path.join(PROJECT_ROOT, "results", "tables"), exist_ok=True)
-    df_metrics.to_csv(os.path.join(PROJECT_ROOT, "results", "tables", "Table_Functional_Metrics.csv"))
-    print("=======================================================\n")
-
-    # 6. 可视化 (🌟 画图前，也把真实曲面截取对齐，防止画图函数崩溃)
-    print("🎨 渲染 2x4 全局热力与截面对比图...")
-    valid_idx = [np.argmin(np.abs(t_eval - t)) for t in t_traj]
-    GT_surface_aligned = GT_surface[valid_idx]
-
-    save_img_path = os.path.join(PROJECT_ROOT, "results", "figures", "Fig3_Functional_Dynamic.jpg")
-    plot_dynamic_functional_2x4(T, X_grid, Y_curves, t_traj, GT_surface_aligned, centers_dict,
-                                target_t=7.5, save_path=save_img_path)
+    # 我们不需要传 GT_surface 进去了，因为我们只依靠原始数据说话
+    plot_dynamic_functional_2x5(T, X_grid, Y_curves, t_traj, centers_dict, target_t=7.5, save_path=save_img_path)
 
     print("🎉 泛函实验圆满结束！")
+
+    print("\n🎨 渲染泛函深度分位数染色对比图...")
+    target_t = 7.5
+    window_size = 1.5
+    idx_slice = np.where(np.abs(T - target_t) <= window_size / 2.0)[0]
+    Y_slice = Y_curves[idx_slice]
+
+    # 重新在这个截面上计算一次静态的 Rank
+    from scipy.stats import rankdata
+
+    # a. NW 欧氏残差深度
+    nw_mean = np.mean(Y_slice, axis=0)
+    nw_residuals = np.linalg.norm(Y_slice - nw_mean, axis=1)
+    nw_ranks = rankdata(nw_residuals) / len(Y_slice)
+
+    # b. AMQR 拓扑深度
+    amqr = AMQR_Engine(**final_amqr_params)
+    _, amqr_ranks, _ = amqr._run_with_oos_protection(Y_slice)
+
+    save_color_path = os.path.join(PROJECT_ROOT, "results", "figures", "Fig3_Functional_Depth_Coloring.pdf")
+    plot_functional_depth_coloring(X_grid, Y_slice, nw_ranks, amqr_ranks, top_ratio=0.5, save_path=save_color_path)
+
+
+    def analyze_peak_fidelity(t_traj, centers_dict, Y_curves, T):
+        """
+        计算并可视化估计曲线的峰值保真度
+        """
+        import pandas as pd
+        import matplotlib.pyplot as plt
+
+        # 1. 计算原始样本的平均峰值作为基准 (Baseline)
+        raw_peaks = np.max(Y_curves, axis=1)
+        baseline_peak = np.mean(raw_peaks)
+
+        methods = ['nw', 'f_l2', 'f_l1', 'kde', 'a']
+        labels = ['NW Mean', 'Fréchet L2', 'Fréchet L1', 'SW-KDE', 'AMQR (Proposed)']
+        colors = ['#34495e', '#e74c3c', '#e67e22', '#9b59b6', '#27ae60']
+
+        results = []
+        plt.figure(figsize=(12, 6), facecolor='white')
+
+        for i, m in enumerate(methods):
+            # 提取该方法在所有时间点的估计曲线的最大值
+            peaks = [np.max(c) for c in centers_dict[m]]
+
+            # 计算统计量
+            m_peak = np.mean(peaks)
+            v_peak = np.var(peaks)
+            bias = m_peak - baseline_peak
+            fidelity = (m_peak / baseline_peak) * 100  # 保真度百分比
+
+            results.append({
+                'Method': labels[i],
+                'Mean Peak': m_peak,
+                'Peak Variance': v_peak,
+                'Amplitude Fidelity (%)': fidelity
+            })
+
+            # 画出峰值随时间的变化曲线
+            plt.plot(t_traj, peaks, label=f"{labels[i]} (Fidelity: {fidelity:.1f}%)", color=colors[i], lw=3)
+
+        # 画出基准线
+        plt.axhline(baseline_peak, color='black', ls='--', lw=2, label=f'Raw Sample Avg Peak ({baseline_peak:.2f})')
+
+        plt.title("Peak Amplitude Fidelity over Time\n(AMQR vs Baselines)", fontsize=16, fontweight='bold')
+        plt.xlabel("Time (T)", fontsize=14)
+        plt.ylabel("Maximum Amplitude of Estimated Curve", fontsize=14)
+        plt.legend(loc='lower right', fontsize=11)
+        plt.grid(True, alpha=0.3)
+        plt.ylim(0, 3.0)
+
+        plt.savefig("results/figures/Fig3_Peak_Fidelity_Analysis.pdf", bbox_inches='tight')
+        plt.show()
+
+        # 打印定量表格
+        df_peak = pd.DataFrame(results)
+        print("\n" + "=" * 50)
+        print("📊 AMPLITUDE FIDELITY QUANTITATIVE RESULTS")
+        print("=" * 50)
+        print(df_peak.to_string(index=False))
+        print("=" * 50)
+
+        return df_peak
+
+
+    analyze_peak_fidelity(t_traj, centers_dict, Y_curves, T)
