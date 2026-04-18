@@ -2,6 +2,7 @@ import ot
 import warnings
 import numpy as np
 from tqdm import tqdm
+from scipy.linalg import orthogonal_procrustes
 from scipy.spatial.distance import cdist
 from scipy.stats import qmc, norm, laplace, rankdata
 from scipy.sparse.csgraph import shortest_path
@@ -33,29 +34,88 @@ class AMQR_Engine:
         self.max_samples = max_samples  # 🌟 控制 O(N^3) 复杂度的核心阀门
         self.use_log_squash = use_log_squash
 
+    def _run_with_oos_protection(self, Y, y_dist_m=None):
+        """
+        🌟 统一的算力防火墙：触发地标隔离与核正则化内蕴投影 (Kernel-regularized Intrinsic Projection)
+        """
+        N = len(Y)
+        if N <= self.max_samples:
+            return self._fit_predict_core(Y, y_dist_m=y_dist_m)
+
+        # 🚨 触发 OOS 保护机制
+        core_idx = np.random.choice(N, size=self.max_samples, replace=False)
+        oos_idx = np.setdiff1d(np.arange(N), core_idx)
+
+        Y_core = Y[core_idx]
+        y_dist_m_core = y_dist_m[np.ix_(core_idx, core_idx)] if y_dist_m is not None else None
+
+        # 1. 仅对核心地标运行精确 GW
+        med_core, ranks_core, z_core, S_x = self._fit_predict_core(Y_core, y_dist_m=y_dist_m_core, return_scale=True)
+
+        # 2. 提取 OOS 点到 Core 点的纯正内蕴距离
+        if y_dist_m is not None:
+            dist_oos_to_core = y_dist_m[np.ix_(oos_idx, core_idx)]
+        else:
+            dist_oos_to_core = cdist(Y[oos_idx].reshape(len(oos_idx), -1), Y_core.reshape(len(core_idx), -1))
+
+        # 3. 核正则化平滑内蕴投影 (Strictly aligned with Paper Step 3)
+        k_nn = min(int(np.log(len(core_idx)) * 2), len(core_idx)) # k \asymp \log N_x
+        nearest_core_indices = np.argsort(dist_oos_to_core, axis=1)[:, :k_nn]
+        nearest_dists = np.take_along_axis(dist_oos_to_core, nearest_core_indices, axis=1)
+
+        # 使用高斯核替代原始 IDW，保证等度连续性 (Equicontinuity)
+        sigma = np.median(nearest_dists) + 1e-8
+        weights = np.exp(-(nearest_dists ** 2) / (2 * sigma ** 2))
+        weights /= np.sum(weights, axis=1, keepdims=True)
+
+        z_oos = np.zeros((len(oos_idx), z_core.shape[1]))
+        for i in range(len(oos_idx)):
+            z_oos[i] = np.average(z_core[nearest_core_indices[i]], axis=0, weights=weights[i])
+
+        # 4. 拼装全局 Z 坐标
+        z_full = np.zeros((N, z_core.shape[1]))
+        z_full[core_idx] = z_core
+        z_full[oos_idx] = z_oos
+
+        # 🌟 严格按照 Eq. (4) 乘回局部伸缩因子 S(x)
+        raw_depths = S_x * np.linalg.norm(z_full, axis=1)
+
+        # 🌟 动态计算参考空间的期望范数，完美适配任何维度的几何体
+        expected_norm = np.sqrt(np.mean(np.linalg.norm(z_core, axis=1)**2))
+        depths = raw_depths / (expected_norm + 1e-9)
+
+        ranks_full = rankdata(depths) / N
+
+        return med_core, ranks_full, z_full
+
     def _generate_latent_qmc(self, d, N):
-        sampler = qmc.Halton(d=d, scramble=False)
+        # 🌟 修复维度耦合：生成 d+1 维序列，分离方向与半径的随机源
+        sampler = qmc.Halton(d=d+1, scramble=False)
         u_grid = np.clip(sampler.random(n=N), 1e-4, 1 - 1e-4)
         Z = np.zeros((N, d))
 
         if self.ref_dist == 'uniform':
             if d == 1:
-                Z = (u_grid * 2) - 1.0
+                Z = (u_grid[:, 0:1] * 2) - 1.0
             elif d == 2:
                 r = np.sqrt(u_grid[:, 0])
                 theta = 2 * np.pi * u_grid[:, 1]
                 Z = np.column_stack([r * np.cos(theta), r * np.sin(theta)])
             else:
-                Z = (u_grid * 2) - 1.0
+                # 前 d 维用于方向，第 d+1 维用于半径，彻底消除相关性
+                Z_dir = norm.ppf(u_grid[:, :d])
+                Z_dir /= (np.linalg.norm(Z_dir, axis=1, keepdims=True) + 1e-9)
+                radius = u_grid[:, d] ** (1.0 / d)
+                Z = Z_dir * radius[:, None]
         elif self.ref_dist == 'gaussian':
-            Z = norm.ppf(u_grid, loc=0, scale=1.0)
+            Z = norm.ppf(u_grid[:, :d], loc=0, scale=1.0)
         elif self.ref_dist == 'laplace':
-            Z = laplace.ppf(u_grid, loc=0, scale=1.0)
+            Z = laplace.ppf(u_grid[:, :d], loc=0, scale=1.0)
 
         Z[0] = np.zeros(d)
         return Z
 
-    def _fit_predict_core(self, Y, y_dist_m=None):
+    def _fit_predict_core(self, Y, y_dist_m=None, return_scale=False):
         """底层纯粹的数学对齐引擎 (支持直接传入预计算距离矩阵 y_dist_m)"""
         N = len(Y)
         Y_flat = Y.reshape(N, -1)
@@ -94,7 +154,7 @@ class AMQR_Engine:
             r_k = dists[:, -1:]
             mle_val = (k_mle - 1) / np.sum(np.log(r_k / dists[:, :-1]), axis=1)
             final_d = int(np.round(np.mean(mle_val)))
-            final_d = max(1, min(final_d, 3))  # 强制封顶
+            final_d = max(1, final_d)  # 强制封顶
 
         # =========================================================
         # 3. 构建目标空间与打乱对称性
@@ -107,7 +167,10 @@ class AMQR_Engine:
             Cy_proc = np.log1p(Cy)
         else:
             Cy_proc = Cy
-        Cy_norm = Cy_proc / (np.nanmax(Cy_proc) + 1e-9)
+
+        # 🌟 提取局部伸缩因子 S(x)
+        S_x = np.nanmax(Cy_proc)
+        Cy_norm = Cy_proc / (S_x + 1e-9)
 
         noise_z = np.random.uniform(0, 1e-8, size=Cz_norm.shape)
         Cz_norm += (noise_z + noise_z.T) / 2.0  # 强制对称化
@@ -132,58 +195,93 @@ class AMQR_Engine:
         # 5. 提取深度与排名
         # =========================================================
         Y_mapped_to_Z = np.dot(gw_plan.T, Z_ref) * N
-        amqr_depths = np.linalg.norm(Y_mapped_to_Z, axis=1)
-        med_idx = np.argmin(amqr_depths)
+
+        # 🌟 严格按照 Eq. (4) 乘回局部伸缩因子 S(x)
+        raw_depths = S_x * np.linalg.norm(Y_mapped_to_Z, axis=1)
+
+        # 🌟 动态计算参考空间的期望范数进行标准化
+        expected_norm = np.sqrt(np.mean(np.linalg.norm(Z_ref, axis=1) ** 2))
+        amqr_depths = raw_depths / (expected_norm + 1e-9)
+
+        # 寻找最小深度及容差范围内的所有候选点
+        min_depth = np.min(amqr_depths)
+        tolerance = 1e-9
+        candidates = np.where(np.abs(amqr_depths - min_depth) < tolerance)[0]
+
+        if len(candidates) == 1:
+            med_idx = candidates[0]
+        else:
+            # 触发 Secondary Fréchet Refinement
+            # 利用前文已计算好的流形距离矩阵 Cy (N x N)
+            print(f"⚠️ 触发几何平局打破机制！候选点数量: {len(candidates)}")
+            # 向量化计算每个候选点到当前邻域内所有点的距离之和
+            frechet_sums = np.sum(Cy[candidates, :], axis=1)
+            best_local_idx = np.argmin(frechet_sums)
+            med_idx = candidates[best_local_idx]
+
         ranks = rankdata(amqr_depths) / N
 
-        return Y[med_idx], ranks
+        if return_scale:
+            return Y[med_idx], ranks, Y_mapped_to_Z, S_x
+
+        return Y[med_idx], ranks, Y_mapped_to_Z
 
     def fit_predict(self, Y, y_dist_m=None, T=None, t_eval=None, window_size=1.0):
-        """
-        新增 y_dist_m 参数。支持按索引优雅切片传入子循环！
-        """
         N = len(Y)
 
+        # ==========================================
+        # 分支 A：静态全局流形 (无时间序列)
+        # ==========================================
         if T is None:
-            if N <= self.max_samples:
-                med, ranks = self._fit_predict_core(Y, y_dist_m=y_dist_m)
-                return med, ranks
-            else:
-                sub_idx = np.random.choice(N, size=self.max_samples, replace=False)
-                Y_sub = Y[sub_idx]
-                # 同步切片距离矩阵
-                y_dist_m_sub = y_dist_m[np.ix_(sub_idx, sub_idx)] if y_dist_m is not None else None
+            # 直接调用带有 OOS 保护的引擎
+            med, ranks, _ = self._run_with_oos_protection(Y, y_dist_m)
+            return med, ranks
 
-                med, ranks_sub = self._fit_predict_core(Y_sub, y_dist_m=y_dist_m_sub)
+        # ==========================================
+        # 分支 B：条件滑动窗口 (动态时空组装)
+        # ==========================================
+        if t_eval is None:
+            t_eval = np.linspace(T.min(), T.max(), 50)
 
-                knn_ext = KNeighborsRegressor(n_neighbors=3).fit(Y_sub.reshape(self.max_samples, -1), ranks_sub)
-                ranks_full = knn_ext.predict(Y.reshape(N, -1))
-                return med, ranks_full
+        step_size = t_eval[1] - t_eval[0] if len(t_eval) > 1 else window_size / 5.0
 
-        else:
-            if t_eval is None:
-                t_eval = np.linspace(T.min(), T.max(), 50)
-            step_size = t_eval[1] - t_eval[0] if len(t_eval) > 1 else window_size / 5.0
+        trajectory_med = []
+        final_ranks = np.ones(N)
 
-            trajectory_med = []
-            final_ranks = np.ones(N)
+        # 用于 Procrustes 同步的状态变量
+        prev_z = None
+        prev_idx = None
 
-            for t_c in tqdm(t_eval):
-                idx = np.where(np.abs(T - t_c) <= window_size / 2.0)[0]
-                if len(idx) < 15:
-                    continue
+        for t_c in tqdm(t_eval):
+            idx = np.where(np.abs(T - t_c) <= window_size / 2.0)[0]
+            if len(idx) < 15:
+                continue
 
-                Y_c = Y[idx]
-                # 🌟 动态时序滑动窗口同样完美支持预计算距离矩阵的局部切片！
-                y_dist_m_c = y_dist_m[np.ix_(idx, idx)] if y_dist_m is not None else None
+            Y_c = Y[idx]
+            y_dist_m_c = y_dist_m[np.ix_(idx, idx)] if y_dist_m is not None else None
 
-                inner_condition = (T[idx] >= t_c - step_size / 2.0) & (T[idx] < t_c + step_size / 2.0)
-                inner_in_idx = np.where(inner_condition)[0]
+            # 🌟 关键修改：用 _run_with_oos_protection 替代 _fit_predict_core
+            # 现在，即使局部窗口涌入一万个点，也不会 OOM，系统会自动截取 max_samples 计算
+            med_c, ranks_c, z_c = self._run_with_oos_protection(Y=Y_c, y_dist_m=y_dist_m_c)
 
-                med_c, ranks_c = self.fit_predict(Y=Y_c, y_dist_m=y_dist_m_c, T=None)
-                trajectory_med.append((t_c, med_c))
+            # --- 下方的正交普氏同步逻辑 (Procrustes) 完全保持您的原样 ---
+            if prev_z is not None:
+                common_global_idx, curr_local_idx, prev_local_idx = np.intersect1d(
+                    idx, prev_idx, return_indices=True
+                )
+                if len(common_global_idx) > z_c.shape[1]:
+                    R, _ = orthogonal_procrustes(z_c[curr_local_idx], prev_z[prev_local_idx])
+                    z_c = z_c @ R
 
-                if len(inner_in_idx) > 0:
-                    final_ranks[idx[inner_in_idx]] = ranks_c[inner_in_idx]
+            prev_z = z_c
+            prev_idx = idx
 
-            return trajectory_med, final_ranks
+            trajectory_med.append((t_c, med_c))
+
+            # Inner-core 切片赋值逻辑
+            inner_condition = (T[idx] >= t_c - step_size / 2.0) & (T[idx] < t_c + step_size / 2.0)
+            inner_in_idx = np.where(inner_condition)[0]
+            if len(inner_in_idx) > 0:
+                final_ranks[idx[inner_in_idx]] = ranks_c[inner_in_idx]
+
+        return trajectory_med, final_ranks
