@@ -6,20 +6,20 @@
 This repository contains the official Python implementation of the paper:
 > **"Distance-Driven Conditional Quantiles on Manifolds via Gromov-Wasserstein Alignment"**  
 
-## 📖 Overview
+## Overview
 
 **Adaptive Manifold Quantile Regression (AMQR)** is a fully data-driven, metric-agnostic framework designed to estimate geometric medians and structurally faithful center-outward quantile regions on complex, non-linear manifolds. 
 
 By reformulating discrete topological extraction as a continuous optimal transport problem, AMQR utilizes exact, unregularized Gromov-Wasserstein ($\mathcal{GW}_2$) alignment to map potentially anisotropic empirical geometries onto a perfectly symmetric latent space. 
 
-### ✨ Core Highlights
+### Core Highlights
 * **Metric-Agnostic Universal Interface:** Seamlessly accommodates empirical $k$-NN graph geodesics (Pathway B), exact analytical metrics (Pathway A), and implicit RKHS distances (Pathway C).
 * **Dimensionality Decoupling:** Successfully circumvents the ambient curse of dimensionality. The convergence rate strictly depends on the predictor dimension $p$ under a rigorously defined geometric bottleneck ($d < p+2$).
 * **Topological Orthogonalization:** Decouples heavy-tailed structural anomalies (e.g., Euclidean swelling, phase shifts) from the healthy geometric backbone, yielding shape-adaptive quantile contours free from rigid isotropic constraints.
 
 ---
 
-## 🗂️ Repository Structure
+## Repository Structure
 
 ```text
 .
@@ -40,7 +40,7 @@ By reformulating discrete topological extraction as a continuous optimal transpo
 
 ---
 
-## ⚙️ Installation & Dependencies
+## Installation & Dependencies
 
 The code is written in Python 3.8+. To install the required dependencies, run:
 
@@ -51,7 +51,7 @@ pip install numpy scipy pandas scikit-learn matplotlib seaborn pot tslearn mne t
 
 ---
 
-## 🚀 Reproducing the Experiments
+## Reproducing the Experiments
 
 We provide standalone scripts in the `experiments/` directory to reproduce all figures and tables presented in the paper. All generated figures will be automatically saved to the `results/figures/` directory.
 
@@ -106,7 +106,7 @@ python experiments/run_addsim_kernel.py
 
 ---
 
-## 💻 Quick Start: Using AMQR on Your Own Data
+## Quick Start: Using AMQR on Your Own Data
 
 The `AMQR_Engine` is designed to be highly modular and easy to integrate into your own pipelines.
 
@@ -142,5 +142,5 @@ To use **Pathway A (Analytical Metric)**, simply precompute your exact distance 
 median, ranks = amqr.fit_predict(Y, y_dist_m=exact_distance_matrix)
 ```
 
-## 📄 License
+## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
